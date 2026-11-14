@@ -4,7 +4,7 @@
  * - Day view renders a session block with the task title
  * - Session block has accessible label with time info
  */
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Dashboard } from './Dashboard'
@@ -80,5 +80,19 @@ describe('Dashboard time-grid', () => {
     render(<Dashboard onStartNewSession={() => {}} />)
     await act(async () => { await userEvent.click(screen.getByRole('button', { name: /week/i })) })
     expect(screen.getAllByText(/Morning Study/).length).toBeGreaterThan(0)
+  })
+
+  it('session detail panel has a Print button that calls window.print', async () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
+    makeEntry()
+    render(<Dashboard onStartNewSession={() => {}} />)
+    // Click the session block to open the detail panel
+    const blocks = screen.getAllByRole('button', { name: /9:00/ })
+    await act(async () => { await userEvent.click(blocks[0]) })
+    // Print button should appear in the detail panel
+    const printBtn = screen.getByRole('button', { name: /print session/i })
+    await act(async () => { await userEvent.click(printBtn) })
+    expect(printSpy).toHaveBeenCalledOnce()
+    printSpy.mockRestore()
   })
 })

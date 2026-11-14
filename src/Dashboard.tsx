@@ -295,6 +295,15 @@ function SessionDetail({
         Colors represent the overall estimated score for each session, not minute-by-minute. Grades are UI aids — not medically or psychologically validated.
       </p>
 
+      {/* Print */}
+      <button
+        className="btn btn-secondary btn-small"
+        onClick={() => window.print()}
+        aria-label="Print Session Details"
+      >
+        🖨 Print Session Details
+      </button>
+
       {/* Timeline toggle */}
       <button
         className="btn btn-secondary btn-small detail-expand-btn"

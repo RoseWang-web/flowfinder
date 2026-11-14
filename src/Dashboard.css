@@ -608,6 +608,10 @@
   top: -7px;
 }
 
+.cal-gh:first-child span {
+  top: 2px;
+}
+
 /* ── Day view — time grid ─────────────────────────────────────────────────── */
 
 .cal-tgrid {
@@ -1166,4 +1170,40 @@
 .edit-form-buttons {
   display: flex;
   gap: 8px;
+}
+
+/* ── Print: show only the detail panel ───────────────────────────────────── */
+
+@media print {
+  .dash-header,
+  .dash-mode-bar,
+  .dash-controls,
+  .summary-bar,
+  .dash-main,
+  .dash-error-banner,
+  .dash-empty-state,
+  .demo-label { display: none !important; }
+
+  .detail-overlay {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .detail-panel {
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  /* hide close button and print button itself when printing */
+  .detail-header .btn-icon,
+  .detail-panel .btn-secondary:first-of-type { display: none !important; }
+
+  /* expand any collapsed sections */
+  .detail-timeline,
+  .detail-event-list { max-height: none !important; overflow: visible !important; }
 }
