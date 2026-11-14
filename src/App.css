@@ -984,6 +984,54 @@ button:disabled { cursor: not-allowed; }
   box-shadow: 0 0 0 3px #E4E9EF;
 }
 
+/* ── Category cards ── */
+.cat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1.5px solid #D8CDBA;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s;
+}
+
+.cat-card:hover {
+  border-color: var(--navy);
+}
+
+.cat-card.selected {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.cat-card-label {
+  font-family: "Young Serif", Georgia, serif;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.cat-card-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.cat-card.selected .cat-card-desc {
+  color: rgba(255,255,255,.65);
+}
+
 .task-notice-label {
   font-size: 0.8125rem;
   font-weight: 600;

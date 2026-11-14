@@ -30,6 +30,11 @@ import './App.css'
 
 // ── Task rule definitions ────────────────────────────────────────────────
 
+const CAT_DESC: Record<string, string> = {
+  web_reading: 'Browsing, articles, research',
+  study_notes: 'Studying, writing, notetaking',
+}
+
 const RULE_KEYS: Array<{ key: keyof TaskRules; label: string }> = [
   { key: 'allowHeadDown', label: 'Allow Head Down' },
   { key: 'allowTabSwitch', label: 'Allow Tab Switch' },
@@ -242,6 +247,7 @@ export default function App() {
   const [draft, setDraft] = useState<TaskRules>(() => loadRulesOrDefault('web_reading'))
   const [localCheckInAnswer, setLocalCheckInAnswer] = useState<string | null>(null)
   const [localCheckInTime, setLocalCheckInTime] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<import('./types').CategoryId>('web_reading')
 
   useEffect(() => {
     if (status === 'completed' && session !== null) {
@@ -601,7 +607,7 @@ export default function App() {
   // ── Setup page (Step 1 — idle) ───────────────────────────────────────
   if (status === 'idle') {
     const buildSessionSettings = (): SessionTaskSettings => ({
-      categoryId: 'web_reading',
+      categoryId: selectedCategory,
       rulesVersion: 1,
       rules: { ...draft },
       taskTitle: taskTitle.trim() || undefined,
@@ -677,6 +683,23 @@ export default function App() {
                   maxLength={120}
                   aria-label="What are you working on?"
                 />
+                <div className="cat-cards">
+                  {CATEGORIES.map(cat => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      className={`cat-card${selectedCategory === cat.id ? ' selected' : ''}`}
+                      onClick={() => {
+                        setSelectedCategory(cat.id)
+                        setDraft(loadRulesOrDefault(cat.id))
+                      }}
+                      aria-pressed={selectedCategory === cat.id}
+                    >
+                      <span className="cat-card-label">{cat.label}</span>
+                      <span className="cat-card-desc">{CAT_DESC[cat.id]}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

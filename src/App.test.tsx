@@ -126,6 +126,18 @@ describe('Result page with timeline', () => {
     expect(screen.getByLabelText('What are you working on?')).toBeDefined()
   })
 
+  it('selecting Study / Notes category card loads its rule defaults', async () => {
+    render(<App />)
+    // web_reading default: allowHeadDown = false
+    const headDownBox = screen.getByRole('checkbox', { name: 'Allow Head Down' })
+    expect((headDownBox as HTMLInputElement).checked).toBe(false)
+    // click the Study / Notes card
+    const studyCard = screen.getByRole('button', { name: /Study \/ Notes/ })
+    await act(async () => { await userEvent.click(studyCard) })
+    // study_notes default: allowHeadDown = true
+    expect((headDownBox as HTMLInputElement).checked).toBe(true)
+  })
+
   it('gaze session: result page shows the attention band and the check-in comparison', () => {
     const events: Session['events'] = [
       { id: 's', sessionId: 'sess-1', eventType: 'session_start', elapsedMs: 0, activeReadingMs: 0, data: { visible: true } },
