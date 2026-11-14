@@ -120,10 +120,10 @@ describe('Result page with timeline', () => {
     expect(screen.getByText('No task settings saved for this session.')).toBeDefined()
   })
 
-  it('idle page shows task category selector', () => {
+  it('idle page shows task setup section with working-on input', () => {
     render(<App />)
     expect(screen.getByText('Task Setup')).toBeDefined()
-    expect(screen.getByRole('combobox')).toBeDefined()
+    expect(screen.getByLabelText('What are you working on?')).toBeDefined()
   })
 
   it('gaze session: result page shows the attention band and the check-in comparison', () => {
@@ -155,7 +155,7 @@ describe('Result page with timeline', () => {
     }))
     render(<App />)
     expect(screen.getByText('Eye Tracking')).toBeDefined()
-    expect(screen.getByText('Focus')).toBeDefined()
+    expect(screen.getAllByText('Focus').length).toBeGreaterThan(0)
     expect(screen.getByText('Focus trend')).toBeDefined()
     expect(screen.getByText('Check-In Comparison')).toBeDefined()
     // 15 windows in the 30 s before the prompt, focus = 1 − 0.5

@@ -14,6 +14,7 @@ export interface SessionTaskSettings {
   categoryId: CategoryId
   rulesVersion: 1
   rules: TaskRules
+  taskTitle?: string
 }
 
 export type EndReason = 'time_up' | 'manual' | 'interrupted'

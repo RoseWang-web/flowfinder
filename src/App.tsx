@@ -1,5 +1,4 @@
 import { useRef, useState, useEffect } from 'react'
-import { article } from './article'
 import {
   useSession,
   formatTime,
@@ -11,21 +10,18 @@ import modelJson from './model.json'
 import { TimelineChart } from './TimelineChart'
 import { buildTimeline } from './timeline'
 import {
-  CheckInAnswer,
+  CheckInAnswer, // used in result page event log
   SessionEvent,
   type Session,
-  type CategoryId,
   type TaskRules,
   type SessionTaskSettings,
   type CalibrationSummary,
   type GazeQuality,
+  type SessionStatus,
 } from './types'
 import {
   CATEGORIES,
   loadRulesOrDefault,
-  saveTaskPreferences,
-  clearTaskPreferences,
-  getDefaultRules,
 } from './taskPreferences'
 import { upsertHistoryEntry } from './historyStorage'
 import { computeSessionAnalysis } from './sessionAnalysis'
@@ -89,7 +85,6 @@ function checkInAnswerLabel(answer: CheckInAnswer | null): string {
   return map[answer]
 }
 
-/** Save the session (events, calibration, scores; no images) as a JSON file */
 function downloadSession(session: Session) {
   const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -100,77 +95,106 @@ function downloadSession(session: Session) {
   URL.revokeObjectURL(url)
 }
 
-// ── Sub-components ───────────────────────────────────────────────────────
+// ── Shared topbar ────────────────────────────────────────────────────────
 
-function StatusBadge({ label, color }: { label: string; color: string }) {
-  return (
-    <span className="status-badge" style={{ background: color }}>
-      {label}
-    </span>
-  )
+function stepClass(stepNum: number, current: number): string {
+  if (stepNum === current) return 'step-pill active'
+  if (stepNum < current) return 'step-pill done'
+  return 'step-pill'
 }
 
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  idle: { label: 'Idle', color: '#6b7280' },
-  running: { label: 'In Progress', color: '#16a34a' },
-  paused: { label: 'Paused', color: '#d97706' },
-  checking_in: { label: 'Checking In', color: '#7c3aed' },
-  overtime: { label: 'Overtime', color: '#dc2626' },
-  completed: { label: 'Completed', color: '#6b7280' },
-}
-
-function CheckInDialog({
-  onAnswer,
-  onSkip,
+function Topbar({
+  step,
+  onViewDashboard,
+  rightContent,
 }: {
-  onAnswer: (a: CheckInAnswer) => void
-  onSkip: () => void
+  step: 1 | 2 | 3
+  onViewDashboard: () => void
+  rightContent?: React.ReactNode
 }) {
-  const options: { value: CheckInAnswer; label: string }[] = [
-    { value: 'on_task', label: 'Yes' },
-    { value: 'partly', label: 'Partly' },
-    { value: 'off_task', label: 'No' },
-    { value: 'not_sure', label: 'Not sure' },
-  ]
   return (
-    <div className="checkin-overlay">
-      <div className="checkin-dialog" role="dialog" aria-modal="true">
-        <p className="checkin-question">Was your attention on the reading before this prompt?</p>
-        <div className="checkin-options">
-          {options.map(o => (
-            <button key={o.value} className="btn btn-checkin" onClick={() => onAnswer(o.value)}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-        <button className="btn btn-skip" onClick={onSkip}>
-          Skip
-        </button>
+    <header className="topbar">
+      <div className="topbar-brand">flowfinder<em>.</em></div>
+      <nav className="step-nav" aria-label="Session steps">
+        <span className={stepClass(1, step)}><i className="step-num">1</i>Set up</span>
+        <span className={stepClass(2, step)}><i className="step-num">2</i>Focus</span>
+        <span className={stepClass(3, step)}><i className="step-num">3</i>Review</span>
+      </nav>
+      <div className="topbar-actions">
+        {rightContent}
+        <button className="btn btn-ghost btn-small" onClick={onViewDashboard}>History</button>
       </div>
-    </div>
+    </header>
   )
 }
 
-function OvertimeDialog({
-  onKeepGoing,
-  onStop,
+// ── SVG Ring Timer ───────────────────────────────────────────────────────
+
+const C = 653.45 // circumference of r=104 circle
+const RING_R = 104
+const RING_SIZE = 240
+
+function RingTimer({
+  remainingMs,
+  plannedDurationMs,
+  status,
+  overtimePending,
 }: {
-  onKeepGoing: () => void
-  onStop: () => void
+  remainingMs: number
+  plannedDurationMs: number
+  status: SessionStatus
+  overtimePending: boolean
 }) {
+  const isUnlimited = plannedDurationMs === 0
+  const isOvertimeRunning = status === 'overtime' && !overtimePending
+
+  let progress = 0
+  if (!isUnlimited && !isOvertimeRunning) {
+    progress = Math.min(1, (plannedDurationMs - remainingMs) / plannedDurationMs)
+  } else {
+    progress = 1
+  }
+
+  const dashoffset = C * (1 - progress)
+
+  const timeText = isOvertimeRunning
+    ? `+${formatTime(Math.floor(remainingMs / 1000))}`
+    : isUnlimited
+      ? formatTime(Math.floor(remainingMs / 1000))
+      : formatTime(Math.ceil(remainingMs / 1000))
+
+  const subLabel = status === 'paused'
+    ? 'Paused'
+    : isOvertimeRunning
+      ? 'extra time'
+      : isUnlimited
+        ? 'elapsed · no limit'
+        : `left of ${formatTime(Math.ceil(plannedDurationMs / 1000))}`
+
+  const ringClass = [
+    'ringwrap',
+    status === 'paused' ? 'paused' : '',
+    isOvertimeRunning ? 'over' : '',
+    isUnlimited ? 'open' : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <div className="overtime-overlay">
-      <div className="overtime-dialog" role="dialog" aria-modal="true">
-        <p className="overtime-title">Time's up!</p>
-        <p className="overtime-message">You've reached your planned session duration. Keep going or end now?</p>
-        <div className="overtime-actions">
-          <button className="btn btn-primary" onClick={onKeepGoing}>
-            Keep Going
-          </button>
-          <button className="btn btn-danger" onClick={onStop}>
-            End Session
-          </button>
-        </div>
+    <div className={ringClass}>
+      <svg viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
+        <circle
+          cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R}
+          className="ring-bg"
+        />
+        <circle
+          cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R}
+          className="ring-fill"
+          strokeDasharray={C}
+          strokeDashoffset={dashoffset}
+        />
+      </svg>
+      <div className="ring-time">
+        <b className="ring-time-num">{timeText}</b>
+        <small className="ring-time-sub">{subLabel}</small>
       </div>
     </div>
   )
@@ -195,7 +219,6 @@ export default function App() {
     resume,
     finish,
     resetToIdle,
-    answerCheckIn,
     skipCheckIn,
     keepGoing,
     stopNow,
@@ -205,8 +228,6 @@ export default function App() {
   } = useSession()
 
   const [pickedDurationMs, setPickedDurationMs] = useState(1_800_000)
-
-  // Reading column, used to scale the line-return threshold
   const columnRef = useRef<HTMLElement | null>(null)
 
   const gaze = useGaze({
@@ -215,16 +236,11 @@ export default function App() {
     getColumnWidth: () => columnRef.current?.clientWidth ?? 0,
   })
 
-  // ── Dev panel state ──────────────────────────────────────────────────
   const [devPanelOpen, setDevPanelOpen] = useState(false)
   const [gazeDotVisible, setGazeDotVisible] = useState(false)
-
-  // ── Task draft state ─────────────────────────────────────────────────
-  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('web_reading')
+  const [taskTitle, setTaskTitle] = useState('')
   const [draft, setDraft] = useState<TaskRules>(() => loadRulesOrDefault('web_reading'))
-  const [prefMsg, setPrefMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Save completed session to multi-session history with computed analysis
   useEffect(() => {
     if (status === 'completed' && session !== null) {
       upsertHistoryEntry({
@@ -235,7 +251,11 @@ export default function App() {
     }
   }, [status, session])
 
-  // ── Dashboard view (all hooks above, conditional render here) ────────
+  // Auto-skip check-in so the timer is never paused for a prompt
+  useEffect(() => {
+    if (checkInPending) skipCheckIn()
+  }, [checkInPending, skipCheckIn])
+
   if (appView === 'dashboard') {
     return (
       <Dashboard
@@ -247,14 +267,12 @@ export default function App() {
     )
   }
 
-  // ── Storage error banner ─────────────────────────────────────────────
   const errorBanner = storageError ? (
     <div className={`error-banner ${storageError.isLoadError ? '' : 'error-write'}`}>
       ⚠️ {storageError.message}
     </div>
   ) : null
 
-  // ── Eye-tracking indicator (reading page) ────────────────────────────
   const gazeLive = gaze.gazeStatus === 'active' || gaze.gazeStatus === 'paused' || gaze.gazeStatus === 'ready'
   const latest = gaze.latest
   const gazeIndicator = gazeLive ? (
@@ -308,7 +326,7 @@ export default function App() {
     </>
   )
 
-  // ── Result page ──────────────────────────────────────────────────────
+  // ── Review page (Step 3) ─────────────────────────────────────────────
   if (status === 'completed' && session !== null) {
     const isInterrupted = session.endReason === 'interrupted'
     const endReasonLabel =
@@ -322,7 +340,6 @@ export default function App() {
     const checkInNeverShown = !checkIn
     const activeDisplay = msToDisplay(session.activeReadingMs)
 
-    // Events to show (deduplicate scroll noise)
     const shownEvents = session.events.filter(
       e => e.eventType !== 'scroll' && e.eventType !== 'attention_score',
     )
@@ -348,40 +365,39 @@ export default function App() {
     const timelineData = buildTimeline(session)
 
     return (
-      <div className="page result-page">
+      <div className="page">
         {errorBanner}
-        <div className="result-card">
-          <h1 className="project-name">flowfinder</h1>
-          <div className={`result-icon ${isInterrupted ? 'interrupted' : ''}`}>
-            {isInterrupted ? '!' : '✓'}
+        <Topbar step={3} onViewDashboard={() => setAppView('dashboard')} />
+
+        {/* Navy band header */}
+        <div className="band">
+          <div className="band-kicker">SESSION COMPLETE</div>
+          <h1 className={`band-title${isInterrupted ? ' interrupted' : ''}`}>
+            {isInterrupted ? 'Session was interrupted.' : "Here's what was recorded."}
+          </h1>
+          <div className="band-metrics">
+            <div className="band-metric">
+              <small className="band-metric-label">Active Reading Time</small>
+              <b className="band-metric-value">{activeDisplay}</b>
+            </div>
+            <div className="band-metric">
+              <small className="band-metric-label">End Reason</small>
+              <b className="band-metric-value">{endReasonLabel}</b>
+            </div>
+            <div className="band-metric">
+              <small className="band-metric-label">Start Time</small>
+              <b className="band-metric-value">{tsToTime(session.startedAt)}</b>
+            </div>
           </div>
-          <h2 className="result-title">
-            {isInterrupted ? 'Session Interrupted' : 'Session Complete'}
-          </h2>
+        </div>
+
+        <div className="res-body">
           {isInterrupted && (
             <p className="result-note">
               The page was refreshed mid-session. Last saved state (as of{' '}
               {tsToTime(session.endedAt ?? session.lastSavedAt)}).
             </p>
           )}
-
-          <div className="result-stats">
-            <div className="stat-row">
-              <span className="stat-label">
-                Active Reading Time
-                <span className="stat-label-note">(excludes pause &amp; check-in)</span>
-              </span>
-              <span className="stat-value">{activeDisplay}</span>
-            </div>
-            <div className="stat-row">
-              <span className="stat-label">End Reason</span>
-              <span className="stat-value">{endReasonLabel}</span>
-            </div>
-            <div className="stat-row">
-              <span className="stat-label">Start Time</span>
-              <span className="stat-value">{tsToTime(session.startedAt)}</span>
-            </div>
-          </div>
 
           {/* Check-in section */}
           <div className="result-section">
@@ -491,6 +507,12 @@ export default function App() {
             {session.taskSettings ? (
               <>
                 <div className="result-stats">
+                  {session.taskSettings.taskTitle && (
+                    <div className="stat-row">
+                      <span className="stat-label">Working On</span>
+                      <span className="stat-value">{session.taskSettings.taskTitle}</span>
+                    </div>
+                  )}
                   <div className="stat-row">
                     <span className="stat-label">Category</span>
                     <span className="stat-value">
@@ -524,14 +546,10 @@ export default function App() {
             <div className="event-list">
               {allDisplayEvents.map(e => (
                 <div key={e.id} className="event-row">
-                  <span className="event-time">
-                    {msToDisplay(e.elapsedMs)}
-                  </span>
+                  <span className="event-time">{msToDisplay(e.elapsedMs)}</span>
                   <span className="event-name">{eventLabel(e.eventType)}</span>
                   {e.eventType === 'page_visibility' && (
-                    <span className="event-detail">
-                      {e.data?.visible ? 'Visible' : 'Hidden'}
-                    </span>
+                    <span className="event-detail">{e.data?.visible ? 'Visible' : 'Hidden'}</span>
                   )}
                   {e.eventType === 'scroll' && e.data?.count !== undefined && (
                     <span className="event-detail">{String(e.data.count)} scrolls</span>
@@ -558,7 +576,7 @@ export default function App() {
           </div>
 
           <div className="result-actions">
-            <button className="btn btn-primary" onClick={() => { resetToIdle(); }}>
+            <button className="btn btn-primary" onClick={() => { resetToIdle() }}>
               New Session
             </button>
             <button className="btn btn-secondary btn-small" onClick={() => setAppView('dashboard')}>
@@ -575,16 +593,15 @@ export default function App() {
     )
   }
 
-  // ── Idle page ──────────────────────────────────────────────────────────
+  // ── Setup page (Step 1 — idle) ───────────────────────────────────────
   if (status === 'idle') {
     const buildSessionSettings = (): SessionTaskSettings => ({
-      categoryId: selectedCategory,
+      categoryId: 'web_reading',
       rulesVersion: 1,
       rules: { ...draft },
+      taskTitle: taskTitle.trim() || undefined,
     })
-    const handleStartGaze = () => {
-      void gaze.startTracker()
-    }
+    const handleStartGaze = () => { void gaze.startTracker() }
     const handleGazeCalibrated = (summary: CalibrationSummary) => {
       gaze.completeCalibration()
       start({
@@ -600,7 +617,7 @@ export default function App() {
     }
 
     return (
-      <div className="page reading-page">
+      <div className="page">
         {errorBanner}
         {gaze.gazeStatus === 'starting' && (
           <div className="gaze-overlay" role="status">
@@ -616,256 +633,270 @@ export default function App() {
             onCancel={gaze.cancel}
           />
         )}
-        <header className="reading-header">
-          <div className="header-top">
-            <div className="project-info">
-              <h1 className="project-name">flowfinder</h1>
-              <p className="project-desc">Focus Observer</p>
-            </div>
-            <div className="session-panel">
-              <StatusBadge label="Ready" color="#6b7280" />
-              <div className="timer-display">
-                {pickedDurationMs === 0 ? '∞' : formatTime(pickedDurationMs / 1000)}
-              </div>
-              <button className="btn btn-ghost btn-small" onClick={() => setAppView('dashboard')}>
-                History
-              </button>
-              {hasStoredData && (
-                <button className="btn btn-ghost btn-small" onClick={deleteData}>
-                  Delete Data
-                </button>
-              )}
-            </div>
-          </div>
-        </header>
-        <main className="article-container" ref={articleRef}>
-          <article className="article">
-            <h2 className="article-title">{article.title}</h2>
-            <p className="article-subtitle">{article.subtitle}</p>
+        <Topbar
+          step={1}
+          onViewDashboard={() => setAppView('dashboard')}
+          rightContent={hasStoredData ? (
+            <button className="btn btn-ghost btn-small" onClick={deleteData}>Delete Data</button>
+          ) : undefined}
+        />
+        <div className="home">
+          {/* Hero */}
+          <section className="hero">
+            <div className="hero-kicker">FOCUS OBSERVATION TOOL</div>
+            <h1 className="hero-brand">Notice where your attention goes<em>.</em></h1>
+            <p className="hero-tagline">Set up a session for any task. flowfinder records visible signals so you can look back at your own attention—no scores, no judgment.</p>
+            <ol className="hero-promises">
+              <li><span>01</span>We only observe what you choose</li>
+              <li><span>02</span>Pause, keep going, or finish anytime</li>
+              <li><span>03</span>Each signal is shown separately</li>
+              <li><span>04</span>No raw video saved, no focus score</li>
+            </ol>
+          </section>
 
-            {/* Task setup section */}
-            <div className="task-setup">
-              <div>
-                <h3 className="task-setup-title">Task Setup</h3>
-                <p className="task-setup-note">Settings are saved for event review. They don't block actions or confirm focus/distraction.</p>
+          {/* Form */}
+          <div className="form-side">
+            {/* Step 1: What are you working on */}
+            <div className="form-step">
+              <div className="form-step-num">1</div>
+              <div className="form-step-body">
+                <h2 className="form-step-label">What are you working on?</h2>
+                <p className="form-step-help">Anything works—studying, coding, writing, design.</p>
+                <input
+                  id="task-title"
+                  type="text"
+                  className="task-title-input"
+                  placeholder="e.g. Research paper, Study notes…"
+                  value={taskTitle}
+                  onChange={e => setTaskTitle(e.target.value)}
+                  maxLength={120}
+                  aria-label="What are you working on?"
+                />
               </div>
+            </div>
 
-              <div className="task-duration-row">
-                <label className="task-label">Session Duration</label>
+            {/* Step 2: What should we notice */}
+            <div className="form-step">
+              <div className="form-step-num">2</div>
+              <div className="form-step-body">
+                <h2 className="form-step-label">What should we notice?</h2>
+                <p className="form-step-help">Pick the signals you want recorded.</p>
+                <div className="task-toggle-list">
+                  {RULE_KEYS.map(({ key, label }) => (
+                    <label key={key} className="task-toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={draft[key]}
+                        onChange={e => {
+                          const val = e.target.checked
+                          setDraft(d => ({ ...d, [key]: val }))
+                        }}
+                      />
+                      <span className="task-toggle-label">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: Duration */}
+            <div className="form-step">
+              <div className="form-step-num">3</div>
+              <div className="form-step-body">
+                <h2 className="form-step-label">How long?</h2>
+                <p className="form-step-help">Pick a preset, type your own, or go with no limit. When time's up, you can keep going.</p>
+                <div className="form-step-label" style={{display:'none'}}>Task Setup</div>
                 <DurationPicker value={pickedDurationMs} onChange={setPickedDurationMs} />
               </div>
-
-              <div className="task-category-row">
-                <label className="task-label" htmlFor="task-category">Task Category</label>
-                <select
-                  id="task-category"
-                  className="task-select"
-                  value={selectedCategory}
-                  onChange={e => {
-                    const cat = e.target.value as CategoryId
-                    setSelectedCategory(cat)
-                    setDraft(loadRulesOrDefault(cat))
-                    setPrefMsg(null)
-                  }}
-                >
-                  {CATEGORIES.map(c => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
-                  ))}
-                </select>
-                <span className="task-category-hint">Switching categories will discard unsaved changes</span>
-              </div>
-
-              <div className="task-toggle-list">
-                {RULE_KEYS.map(({ key, label }) => (
-                  <label key={key} className="task-toggle-row">
-                    <input
-                      type="checkbox"
-                      checked={draft[key]}
-                      onChange={e => {
-                        const val = e.target.checked
-                        setDraft(d => ({ ...d, [key]: val }))
-                        setPrefMsg(null)
-                      }}
-                    />
-                    <span className="task-toggle-label">{label}</span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="task-pref-actions">
-                <button
-                  className="btn btn-secondary btn-small"
-                  onClick={() => {
-                    const err = saveTaskPreferences(selectedCategory, draft)
-                    if (err) setPrefMsg({ type: 'error', text: err.message })
-                    else setPrefMsg({ type: 'success', text: 'Default saved for this category.' })
-                  }}
-                >
-                  Save as default
-                </button>
-                <button
-                  className="btn btn-ghost btn-small"
-                  onClick={() => {
-                    const sysDefault = getDefaultRules(selectedCategory)
-                    const err = clearTaskPreferences(selectedCategory)
-                    setDraft(sysDefault)
-                    if (err) setPrefMsg({ type: 'error', text: `Settings reset to defaults, but ${err.message}` })
-                    else setPrefMsg({ type: 'success', text: 'Reset to system defaults.' })
-                  }}
-                >
-                  Reset to default
-                </button>
-              </div>
-
-              {prefMsg && (
-                <p className={`task-pref-msg task-pref-msg-${prefMsg.type}`}>
-                  {prefMsg.type === 'success' ? '✓' : '⚠'} {prefMsg.text}
-                </p>
-              )}
             </div>
 
-            {/* Eye-tracking section */}
-            <div className="camera-consent gaze-consent">
-              <p className="camera-consent-title">Eye Tracking</p>
-              <p className="camera-consent-desc">
-                Estimates gaze position via your camera to measure focus from reading patterns. Requires ~1 min of calibration.
-                Video is processed locally and never saved. Only estimated scores are stored.
-                {selectedCategory !== 'web_reading' && ' This mode is optimized for web reading; accuracy may vary for other task types.'}
-              </p>
-              <div className="camera-consent-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={handleStartGaze}
-                  disabled={gaze.gazeStatus === 'starting' || gaze.gazeStatus === 'calibrating'}
-                >
-                  Enable Eye Tracking
-                </button>
-                <button className="btn btn-secondary" onClick={handleNoGazeStart}>
-                  Continue without Eye Tracking
-                </button>
+            {/* Step 4: Eye Tracking */}
+            <div className="form-step">
+              <div className="form-step-num">4</div>
+              <div className="form-step-body">
+                <h2 className="form-step-label">Eye Tracking</h2>
+                <div className="gaze-consent-block">
+                  <p className="gaze-consent-desc">
+                    Estimates gaze position via your camera to measure focus from reading patterns. Requires ~1 min of calibration.
+                    Video is processed locally and never saved. Only estimated scores are stored.
+                  </p>
+                  <div className="gaze-consent-actions">
+                    <button
+                      className="btn btn-secondary btn-small"
+                      onClick={handleStartGaze}
+                      disabled={gaze.gazeStatus === 'starting' || gaze.gazeStatus === 'calibrating'}
+                    >
+                      Enable Eye Tracking
+                    </button>
+                  </div>
+                  {gaze.gazeError && (
+                    <p className="camera-error-msg">⚠️ {gaze.gazeError.message}</p>
+                  )}
+                </div>
               </div>
-              {gaze.gazeError && (
-                <p className="camera-error-msg">⚠️ {gaze.gazeError.message}</p>
-              )}
             </div>
 
-            <div className="article-body">
-              {article.paragraphs.map((para, i) => (
-                <p key={i} className="article-para">{para}</p>
-              ))}
+            {/* Start */}
+            <div className="start-row">
+              <button className="rbtn" onClick={handleNoGazeStart} aria-label="Start session">
+                <span className="inner">
+                  <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                    <path d="M8 5.5v13l11-6.5z" fill="currentColor"/>
+                  </svg>
+                  <b>Start</b>
+                </span>
+              </button>
+              <div>
+                <h3 className="start-heading">Ready when you are.</h3>
+                <span className="start-alt">or enable Eye Tracking above to start with gaze tracking</span>
+              </div>
             </div>
-          </article>
-        </main>
+          </div>
+        </div>
       </div>
     )
   }
 
-  // ── Reading / paused / checking_in / overtime ───────────────────────
-  const statusMeta = STATUS_META[status] ?? STATUS_META.running
-  const isUnlimitedSession = plannedDurationMs === 0
+  // ── Focus page (Step 2 — running / paused / overtime) ──
   const isOvertimeRunning = status === 'overtime' && !overtimePending
-  const progressPct = (isUnlimitedSession || isOvertimeRunning)
-    ? 100
-    : Math.min(100, ((plannedDurationMs - remainingMs) / plannedDurationMs) * 100)
+
+  const statusLabel =
+    status === 'paused' ? 'Paused'
+    : status === 'overtime' && overtimePending ? "Time's Up"
+    : status === 'overtime' ? 'Overtime'
+    : 'In Progress'
 
   return (
-    <div className="page reading-page">
+    <div className="page">
       {errorBanner}
-      {checkInPending && (
-        <CheckInDialog onAnswer={answerCheckIn} onSkip={skipCheckIn} />
-      )}
-      {overtimePending && (
-        <OvertimeDialog onKeepGoing={keepGoing} onStop={stopNow} />
-      )}
-      <header className="reading-header">
-        <div className="header-top">
-          <div className="project-info">
-            <h1 className="project-name">flowfinder</h1>
-            <p className="project-desc">Focus Observer</p>
+      <Topbar step={2} onViewDashboard={() => setAppView('dashboard')} />
+      <div className="sessionv-body">
+
+        {/* Center: timer + controls */}
+        <main className="focus-center" ref={articleRef}>
+          {/* Task title */}
+          <div className="focus-eyebrow">NOW WORKING ON</div>
+          <h1 className="focus-title">
+            {session?.taskSettings?.taskTitle || taskTitle || 'Focus session'}
+          </h1>
+
+          {/* Status */}
+          <div className={`focus-status${status === 'running' || status === 'checking_in' ? ' live' : status === 'paused' ? ' paused' : ''}`}>
+            <i className={`focus-status-dot focus-status-${status}`} />
+            {statusLabel}
           </div>
-          <div className="session-panel">
-            <StatusBadge label={statusMeta.label} color={statusMeta.color} />
-            <div className="timer-display">
-              {isOvertimeRunning
-                ? `+${formatTime(Math.floor(remainingMs / 1000))}`
-                : isUnlimitedSession
-                  ? formatTime(Math.floor(remainingMs / 1000))
-                  : formatTime(Math.ceil(remainingMs / 1000))}
-            </div>
-            {!isUnlimitedSession && (
-              <div className="progress-bar-wrap">
-                <div
-                  className="progress-bar-fill overtime-fill"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            )}
-            {gazeIndicator}
-            <div className="controls">
-              {status === 'running' && (
+
+          {/* Ring timer */}
+          <RingTimer
+            remainingMs={remainingMs}
+            plannedDurationMs={plannedDurationMs}
+            status={status}
+            overtimePending={overtimePending}
+          />
+
+          {/* Circular controls */}
+          {!overtimePending && (
+            <div className="rcontrols">
+              {(status === 'running' || status === 'checking_in') && (
                 <>
-                  <button className="btn btn-secondary" onClick={pause} disabled={checkInPending}>
+                  <button className="rc pz" onClick={pause} aria-label="Pause">
+                    <span className="circ">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <rect x="6.5" y="5" width="4" height="14" rx="1" />
+                        <rect x="13.5" y="5" width="4" height="14" rx="1" />
+                      </svg>
+                    </span>
                     Pause
                   </button>
-                  <button className="btn btn-danger" onClick={finish} disabled={checkInPending}>
-                    End Session
+                  <button className="rc st" onClick={finish} aria-label="Finish">
+                    <span className="circ">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
+                    </span>
+                    Finish
                   </button>
                 </>
               )}
               {status === 'paused' && (
                 <>
-                  <button className="btn btn-primary" onClick={resume} disabled={checkInPending}>
+                  <button className="rc pz" onClick={resume} aria-label="Resume">
+                    <span className="circ">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M8 5.5v13l11-6.5z" />
+                      </svg>
+                    </span>
                     Resume
                   </button>
-                  <button className="btn btn-danger" onClick={finish} disabled={checkInPending}>
-                    End Session
+                  <button className="rc st" onClick={finish} aria-label="Finish">
+                    <span className="circ">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
+                    </span>
+                    Finish
                   </button>
                 </>
               )}
-              {status === 'overtime' && !overtimePending && (
-                <button className="btn btn-danger" onClick={finish}>
-                  End Session
+              {isOvertimeRunning && (
+                <button className="rc st" onClick={finish} aria-label="Finish">
+                  <span className="circ">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                  </span>
+                  Finish
                 </button>
               )}
-              {status === 'checking_in' && (
-                <span className="status-hint">Please answer the check-in first</span>
-              )}
             </div>
-          </div>
-        </div>
-      </header>
+          )}
 
-      <main className="article-container" ref={articleRef}>
-        <article className="article" ref={columnRef}>
-          <h2 className="article-title">{article.title}</h2>
-          <p className="article-subtitle">{article.subtitle}</p>
-          <div className="article-body">
-            {article.paragraphs.map((para, i) => (
-              <p key={i} className="article-para">{para}</p>
-            ))}
-          </div>
-        </article>
-
-        {/* ── Dev panel (only when eye-tracking is active) ── */}
-        {gazeLive && (
-          <section className="dev-panel" aria-label="Dev Panel">
-            <button
-              className="dev-panel-toggle"
-              onClick={() => setDevPanelOpen(o => !o)}
-              aria-expanded={devPanelOpen}
-            >
-              {devPanelOpen ? '▲' : '▼'} Dev Panel
-            </button>
-            {devPanelOpen && (
-              <div className="dev-panel-body">
-                {gazeDevRows}
+          {/* Overtime card */}
+          {overtimePending && (
+            <div className="timeup">
+              <h2 className="timeup-title">Time's up.</h2>
+              <p className="timeup-msg">Want to keep going? The timer will count your extra time. You can finish whenever you're ready.</p>
+              <div className="timeup-actions">
+                <button className="btn btn-primary" onClick={keepGoing}>Keep going</button>
+                <button className="btn btn-secondary" onClick={stopNow}>Finish session</button>
               </div>
-            )}
-          </section>
-        )}
-      </main>
+            </div>
+          )}
+
+          {gazeIndicator}
+
+          {gazeLive && (
+            <section className="dev-panel" aria-label="Dev Panel" style={{ width: '100%', maxWidth: 480 }}>
+              <button
+                className="dev-panel-toggle"
+                onClick={() => setDevPanelOpen(o => !o)}
+                aria-expanded={devPanelOpen}
+              >
+                {devPanelOpen ? '▲' : '▼'} Dev Panel
+              </button>
+              {devPanelOpen && (
+                <div className="dev-panel-body">{gazeDevRows}</div>
+              )}
+            </section>
+          )}
+        </main>
+
+        {/* Right panel: what's observed + decorative check-in */}
+        <aside className="panel" ref={columnRef as React.RefObject<HTMLElement>}>
+          <p className="panel-ptitle">WHAT'S BEING OBSERVED</p>
+          <div className="checkin-deco-card">
+            <p className="panel-deco-label">QUICK CHECK-IN</p>
+            <p className="checkin-deco-q">Just before this question, was your attention on your task?</p>
+            <div className="checkin-deco-opts">
+              {['Yes', 'Partly', 'No', 'Not sure'].map(label => (
+                <button key={label} className="panel-checkin-btn" disabled>{label}</button>
+              ))}
+            </div>
+            <p className="checkin-deco-note">Automatic focus prompts — coming soon</p>
+          </div>
+        </aside>
+
+      </div>
     </div>
   )
 }
-
-
