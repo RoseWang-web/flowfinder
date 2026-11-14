@@ -240,6 +240,8 @@ export default function App() {
   const [gazeDotVisible, setGazeDotVisible] = useState(false)
   const [taskTitle, setTaskTitle] = useState('')
   const [draft, setDraft] = useState<TaskRules>(() => loadRulesOrDefault('web_reading'))
+  const [localCheckInAnswer, setLocalCheckInAnswer] = useState<string | null>(null)
+  const [localCheckInTime, setLocalCheckInTime] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === 'completed' && session !== null) {
@@ -889,10 +891,26 @@ export default function App() {
             <p className="checkin-deco-q">Just before this question, was your attention on your task?</p>
             <div className="checkin-deco-opts">
               {['Yes', 'Partly', 'No', 'Not sure'].map(label => (
-                <button key={label} className="panel-checkin-btn" disabled>{label}</button>
+                <button
+                  key={label}
+                  className={`panel-checkin-btn${localCheckInAnswer === label ? ' selected' : ''}`}
+                  onClick={() => {
+                    const elapsedMs = plannedDurationMs === 0
+                      ? remainingMs
+                      : Math.max(0, plannedDurationMs - remainingMs)
+                    setLocalCheckInAnswer(label)
+                    setLocalCheckInTime(formatTime(Math.floor(elapsedMs / 1000)))
+                  }}
+                >
+                  {label}
+                </button>
               ))}
             </div>
-            <p className="checkin-deco-note">Automatic focus prompts — coming soon</p>
+            <p className={`checkin-deco-note${localCheckInAnswer ? ' saved' : ''}`}>
+              {localCheckInAnswer
+                ? `✓ Saved at ${localCheckInTime}: ${localCheckInAnswer}`
+                : 'Automatic focus prompts — coming soon'}
+            </p>
           </div>
         </aside>
 
