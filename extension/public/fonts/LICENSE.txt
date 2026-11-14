@@ -1,0 +1,6 @@
+Work Sans — Copyright 2019 The Work Sans Project Authors (https://github.com/weiweihuanghuang/Work-Sans)
+Young Serif — Copyright 2023 The Young Serif Project Authors (https://github.com/noirblancrouge/YoungSerif)
+
+Both fonts are licensed under the SIL Open Font License, Version 1.1:
+https://openfontlicense.org
+Files here are the unmodified Latin subsets served by Google Fonts.

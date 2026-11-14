@@ -19,6 +19,12 @@ import { makePendingAnalysis } from './analysisTypes'
 import { loadSession } from './storage'
 
 export const HISTORY_SCHEMA_VERSION = 1
+
+/**
+ * Dispatched on window when history was written from outside this app's own
+ * code (the browser extension syncs its sessions in), so open views reload.
+ */
+export const HISTORY_UPDATED_EVENT = 'flowfinder:history-updated'
 const HISTORY_KEY = 'flowfinder_history_v1'
 
 export interface HistoryEntry {

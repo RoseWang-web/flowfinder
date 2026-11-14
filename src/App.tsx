@@ -208,7 +208,10 @@ function RingTimer({
 // ── Main App ─────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [appView, setAppView] = useState<'reading' | 'dashboard'>('reading')
+  // #dashboard opens history directly (the browser extension's "Full review" link)
+  const [appView, setAppView] = useState<'reading' | 'dashboard'>(() =>
+    window.location.hash === '#dashboard' ? 'dashboard' : 'reading',
+  )
 
   const {
     status,

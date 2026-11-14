@@ -65,7 +65,14 @@ export function parseGazeError(err: unknown): CameraError {
   return parseCameraError(err)
 }
 
-export function createWebGazerTracker(): GazeTracker {
+export interface WebGazerTrackerOptions {
+  /** Where face_mesh's JS/WASM/data files are served from (default: jsdelivr CDN).
+   *  The browser extension serves a bundled copy of the same version. */
+  faceMeshPath?: string
+}
+
+export function createWebGazerTracker(options: WebGazerTrackerOptions = {}): GazeTracker {
+  const faceMeshPath = options.faceMeshPath ?? FACE_MESH_CDN
   let wg: WebGazerModule | null = null
   let running = false
   const listeners = new Set<(s: GazeSample) => void>()
@@ -87,7 +94,7 @@ export function createWebGazerTracker(): GazeTracker {
       if (!wg) {
         const mod = await import(/* @vite-ignore */ 'webgazer')
         wg = (mod.default ?? mod) as unknown as WebGazerModule
-        wg.params.faceMeshSolutionPath = FACE_MESH_CDN
+        wg.params.faceMeshSolutionPath = faceMeshPath
       }
       wg.setRegression('ridge')
         .saveDataAcrossSessions(false)   // never keep face data in the browser

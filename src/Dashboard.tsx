@@ -6,6 +6,7 @@ import {
   deleteHistoryEntry,
   updateManualOverride,
   clearManualOverride,
+  HISTORY_UPDATED_EVENT,
   type HistoryData,
   type HistoryEntry,
   type HistoryStorageError,
@@ -272,6 +273,16 @@ function SessionDetail({
           <span className="detail-stat-label">Camera</span>
           <span className="detail-stat-value">{session.cameraEnabled ? 'Enabled' : 'Not Used'}</span>
         </div>
+        <div className="detail-stat-row">
+          <span className="detail-stat-label">Source</span>
+          <span className="detail-stat-value">{session.source === 'extension' ? 'Browser extension' : 'Web app'}</span>
+        </div>
+        {session.source === 'extension' && session.pages && session.pages.length > 0 && (
+          <div className="detail-stat-row">
+            <span className="detail-stat-label">Sites</span>
+            <span className="detail-stat-value">{[...new Set(session.pages.map(p => p.host))].join(', ')}</span>
+          </div>
+        )}
         {analysis.scoringVersion && (
           <div className="detail-stat-row">
             <span className="detail-stat-label">Analysis v</span>
@@ -674,8 +685,16 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
   })
   const [loadError, setLoadError] = useState<HistoryStorageError | null>(null)
   const [writeError, setWriteError] = useState<HistoryStorageError | null>(null)
+  // Bumped when the browser extension syncs sessions in while the Dashboard is open
+  const [reloadToken, setReloadToken] = useState(0)
 
-  // Load data when mode changes
+  useEffect(() => {
+    const onUpdated = () => setReloadToken(t => t + 1)
+    window.addEventListener(HISTORY_UPDATED_EVENT, onUpdated)
+    return () => window.removeEventListener(HISTORY_UPDATED_EVENT, onUpdated)
+  }, [])
+
+  // Load data when mode changes (or new sessions arrive)
   useEffect(() => {
     if (mode === 'demo') {
       setHistoryData(getMockHistoryData())
@@ -692,7 +711,7 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
     } else {
       setLoadError(result.error)
     }
-  }, [mode])
+  }, [mode, reloadToken])
 
   // ── Derived data ──────────────────────────────────────────────────────
   const allEntries = historyData.entries

@@ -119,4 +119,14 @@ export interface Session {
   taskSettings?: SessionTaskSettings
   /** Planned session duration in ms. 0 = unlimited (∞). Absent in old sessions — treat as 120_000. */
   plannedDurationMs?: number
+  /** Where the session was recorded. Absent = the web app. */
+  source?: 'web_app' | 'extension'
+  /** Extension sessions: sites read, in order (hostname only — never paths or full URLs) */
+  pages?: SessionPage[]
+}
+
+export interface SessionPage {
+  host: string
+  /** ms since session startedAt when the user switched to this site */
+  enteredElapsedMs: number
 }

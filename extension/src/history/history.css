@@ -1,0 +1,45 @@
+body { background: #EDE6DA; }
+.history { max-width: 680px; margin: 0 auto; padding: 28px 16px 60px; }
+.hhead { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.hhead .brand { font-size: 26px; }
+.banner {
+  background: var(--cream); border: 1.5px solid var(--line); border-radius: 10px;
+  padding: 10px 14px; font-size: 13px; line-height: 1.5; margin: 0 0 16px;
+}
+.banner code { font-size: 12px; background: #fff; padding: 1px 5px; border-radius: 4px; }
+.banner .link { font-size: 13px; }
+.empty { text-align: center; margin-top: 40px; }
+
+.sessions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.session { background: #fff; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
+.session.open { border-color: var(--navy); }
+.row {
+  width: 100%; display: grid; grid-template-columns: 9.5em 1fr auto auto; gap: 14px; align-items: center;
+  background: none; border: 0; padding: 12px 16px; text-align: left; font-size: 13px;
+}
+.row .when { color: var(--muted); font-weight: 600; }
+.row .task { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .num { font-family: var(--serif); font-size: 17px; }
+.row .focus { min-width: 3em; text-align: right; color: var(--navy); }
+
+.detail { border-top: 1px solid var(--line); padding: 12px 16px 14px; background: var(--cream); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stats div { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.stats small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.stats b { font-family: var(--serif); font-weight: 400; font-size: 19px; }
+.stats b.small { font-size: 15px; }
+.sites { font-size: 12px; margin: 10px 0 0; }
+.small { font-size: 12px; }
+.chart { margin: 12px 0 0; }
+.chart svg { width: 100%; height: 90px; display: block; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.chart .line { fill: none; stroke: var(--navy); stroke-width: 2; stroke-linejoin: round; }
+.chart .mid { stroke: var(--navy2); stroke-dasharray: 4 4; }
+.chart figcaption { margin-top: 4px; }
+.actions { display: flex; gap: 16px; margin-top: 12px; }
+.actions .link { text-decoration: underline; text-underline-offset: 3px; }
+.danger { color: var(--red) !important; margin-left: auto; }
+
+@media (max-width: 520px) {
+  .row { grid-template-columns: 1fr auto; }
+  .row .when { grid-column: 1 / -1; }
+}

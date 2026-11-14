@@ -1,0 +1,85 @@
+/* FlowFinder extension design tokens (from the concept mockup) — extension pages */
+@font-face {
+  font-family: 'FF Work Sans';
+  src: url('/fonts/WorkSans-latin.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'FF Young Serif';
+  src: url('/fonts/YoungSerif-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --ink: #1F2E3F;
+  --muted: #5E5A52;
+  --navy: #2F4D6B;
+  --navy2: #E4E9EF;
+  --olive: #6E7B5E;
+  --mustard: #F5CD5A;
+  --red: #D34C42;
+  --cream: #FFFCF6;
+  --cta: #F2B23E;
+  --gray: #B8B2A7;
+  --line: #E3D8C4;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --sans: 'FF Work Sans', 'Work Sans', 'Noto Sans TC', system-ui, sans-serif;
+  --serif: 'FF Young Serif', 'Young Serif', Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 500;
+  font-variant-numeric: lining-nums tabular-nums;
+  background: var(--cream);
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.serif { font-family: var(--serif); font-weight: 400; }
+.brand { font-family: var(--serif); font-size: 20px; }
+.brand em { font-style: normal; color: var(--navy); }
+
+/* Round "record" button with the grain texture */
+.rbtn {
+  flex: none; width: 72px; height: 72px; border-radius: 50%;
+  border: 1.5px solid var(--ink); background-color: var(--cta);
+  display: grid; place-items: center; position: relative; overflow: hidden;
+  box-shadow: 4px 4px 0 var(--ink); transition: transform .12s, box-shadow .12s; padding: 0;
+}
+.rbtn::after {
+  content: ''; position: absolute; inset: 0; background-image: var(--grain);
+  background-size: 180px; opacity: .16; mix-blend-mode: multiply; pointer-events: none;
+}
+.rbtn svg { position: relative; z-index: 1; margin-left: 4px; }
+.rbtn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+.rbtn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.rbtn:disabled { opacity: .5; cursor: default; transform: none; box-shadow: 4px 4px 0 var(--ink); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1.5px solid #CFC4B0; background: #fff; border-radius: 6px;
+  padding: 6px 9px; font-size: 12px; font-weight: 600;
+}
+.chip.sel { background: var(--navy); border-color: var(--navy); color: #fff; }
+.chip input {
+  width: 34px; border: 0; background: transparent; text-align: center;
+  font-weight: 700; outline: none; padding: 0;
+}
+.chip.sel input { color: #fff; }
+.chip input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.chip small { font-weight: 600; opacity: .75; }
+
+.btn-solid, .btn-ghost {
+  border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 700;
+  border: 1.5px solid var(--navy);
+}
+.btn-solid { background: var(--navy); color: #fff; }
+.btn-ghost { background: #fff; color: var(--navy); }
+.btn-solid:disabled { opacity: .45; cursor: default; }
+.link { background: none; border: 0; padding: 0; color: var(--navy); font-weight: 600; font-size: 12px; text-decoration: none; }
+.muted { color: var(--muted); }
