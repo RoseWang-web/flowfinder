@@ -7,6 +7,7 @@ import {
   CheckInAnswer,
   EventType,
   SCHEMA_VERSION,
+  type SessionTaskSettings,
 } from './types'
 import { loadSession, saveSession, clearSession, StorageError } from './storage'
 
@@ -53,7 +54,7 @@ export interface SessionUIState {
 }
 
 export interface SessionActions {
-  start: (opts?: { cameraEnabled?: boolean }) => void
+  start: (opts?: { cameraEnabled?: boolean; taskSettings?: SessionTaskSettings }) => void
   pause: () => void
   resume: () => void
   finish: () => void
@@ -430,7 +431,7 @@ export function useSession(): SessionUIState & SessionActions {
 
   // ── Actions ───────────────────────────────────────────────────────────
 
-  const start = useCallback((opts?: { cameraEnabled?: boolean }) => {
+  const start = useCallback((opts?: { cameraEnabled?: boolean; taskSettings?: SessionTaskSettings }) => {
     // Only allowed from idle with no active session, OR after deleting data
     const s = sessionRef.current
     if (s && s.status !== 'idle') return
@@ -456,6 +457,9 @@ export function useSession(): SessionUIState & SessionActions {
       endReason: null,
       checkIn: null,
       cameraEnabled: opts?.cameraEnabled === true,
+      taskSettings: opts?.taskSettings
+        ? { ...opts.taskSettings, rules: { ...opts.taskSettings.rules } }
+        : undefined,
       events: [
         {
           id: makeId(),

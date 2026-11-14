@@ -2,6 +2,20 @@ export const SCHEMA_VERSION = 2
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'checking_in' | 'completed'
 
+export type CategoryId = 'web_reading' | 'study_notes'
+
+export interface TaskRules {
+  allowHeadDown: boolean
+  allowTabSwitch: boolean
+  allowWindowBlur: boolean
+}
+
+export interface SessionTaskSettings {
+  categoryId: CategoryId
+  rulesVersion: 1
+  rules: TaskRules
+}
+
 export type EndReason = 'time_up' | 'manual' | 'interrupted'
 
 export type CheckInAnswer = 'on_task' | 'partly' | 'off_task' | 'not_sure'
@@ -59,4 +73,6 @@ export interface Session {
   events: SessionEvent[]
   /** Whether user chose camera mode for this session (optional for backward compat) */
   cameraEnabled?: boolean
+  /** Immutable copy of task settings at session start. Absent in sessions from before this feature. */
+  taskSettings?: SessionTaskSettings
 }

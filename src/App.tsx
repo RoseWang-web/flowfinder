@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from 'react'
 import { article } from './article'
 import {
   useSession,
@@ -7,8 +8,24 @@ import {
 import { useCamera } from './useCamera'
 import { TimelineChart } from './TimelineChart'
 import { buildTimeline } from './timeline'
-import { CheckInAnswer, SessionEvent } from './types'
+import { LANDMARK_CONNECTIONS } from './camera'
+import { CheckInAnswer, SessionEvent, type CategoryId, type TaskRules, type SessionTaskSettings } from './types'
+import {
+  CATEGORIES,
+  loadRulesOrDefault,
+  saveTaskPreferences,
+  clearTaskPreferences,
+  getDefaultRules,
+} from './taskPreferences'
 import './App.css'
+
+// ── Task rule definitions ────────────────────────────────────────────────
+
+const RULE_KEYS: Array<{ key: keyof TaskRules; label: string }> = [
+  { key: 'allowHeadDown', label: '允許低頭' },
+  { key: 'allowTabSwitch', label: '允許切換分頁' },
+  { key: 'allowWindowBlur', label: '允許視窗失焦' },
+]
 
 // ── Utilities ────────────────────────────────────────────────────────────
 
@@ -130,10 +147,86 @@ export default function App() {
     videoRef,
     enableCamera,
     disableCamera,
+    detectorKind,
+    landmarkerFallbackMsg,
+    latestLandmarkFrameRef,
+    landmarkFrameSeq,
   } = useCamera({
     sessionStatus: status,
     onSessionEvent: recordEvent,
   })
+
+  // ── Dev panel state ──────────────────────────────────────────────────
+  const [devPanelOpen, setDevPanelOpen] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  // ── Task draft state ─────────────────────────────────────────────────
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('web_reading')
+  const [draft, setDraft] = useState<TaskRules>(() => loadRulesOrDefault('web_reading'))
+  const [prefMsg, setPrefMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Draw landmark overlay onto the small video canvas.
+  // Must account for object-fit:cover: landmarks are in raw video coordinates,
+  // but the preview clips/scales the video to fit 96×72 px.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (!devPanelOpen || cameraStatus !== 'ready') return
+    const frame = latestLandmarkFrameRef.current
+    if (!frame || !frame.faceDetected || frame.landmarks.length < 478) return
+
+    const CW = canvas.width   // 96
+    const CH = canvas.height  // 72
+
+    // Read actual video dimensions to handle object-fit: cover correctly.
+    const video = videoRef.current
+    const vW = (video?.videoWidth  || 0) > 0 ? video!.videoWidth  : CW
+    const vH = (video?.videoHeight || 0) > 0 ? video!.videoHeight : CH
+
+    // Compute the scale and offsets that object-fit: cover uses.
+    // scale is chosen so the video fills the container completely;
+    // the smaller dimension fits exactly, the larger overflows (is clipped).
+    const scale = Math.max(CW / vW, CH / vH)
+    const ox = (CW - vW * scale) / 2  // negative when video is wider
+    const oy = (CH - vH * scale) / 2  // negative when video is taller
+
+    // Map normalized landmark to canvas pixel, accounting for cover offset and mirror.
+    // The video is CSS-mirrored (transform: scaleX(-1)); the canvas is not.
+    // So we flip x: canvasX = CW - displayedX.
+    const lx = (i: number): number => CW - (frame.landmarks[i].x * vW * scale + ox)
+    const ly = (i: number): number => frame.landmarks[i].y * vH * scale + oy
+
+    // Eye outlines — green
+    ctx.strokeStyle = '#4ade80'
+    ctx.lineWidth = 1.2
+    for (const conn of [...LANDMARK_CONNECTIONS.RIGHT_EYE, ...LANDMARK_CONNECTIONS.LEFT_EYE]) {
+      ctx.beginPath()
+      ctx.moveTo(lx(conn.start), ly(conn.start))
+      ctx.lineTo(lx(conn.end), ly(conn.end))
+      ctx.stroke()
+    }
+
+    // Iris outlines — sky blue
+    ctx.strokeStyle = '#38bdf8'
+    ctx.lineWidth = 1.2
+    for (const conn of [...LANDMARK_CONNECTIONS.RIGHT_IRIS, ...LANDMARK_CONNECTIONS.LEFT_IRIS]) {
+      ctx.beginPath()
+      ctx.moveTo(lx(conn.start), ly(conn.start))
+      ctx.lineTo(lx(conn.end), ly(conn.end))
+      ctx.stroke()
+    }
+
+    // Iris center dots — 2.5 px radius
+    ctx.fillStyle = '#38bdf8'
+    for (const ci of [LANDMARK_CONNECTIONS.RIGHT_IRIS_CENTER, LANDMARK_CONNECTIONS.LEFT_IRIS_CENTER]) {
+      ctx.beginPath()
+      ctx.arc(lx(ci), ly(ci), 2.5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }, [landmarkFrameSeq, devPanelOpen, cameraStatus, latestLandmarkFrameRef, videoRef])
 
   // ── Storage error banner ─────────────────────────────────────────────
   const errorBanner = storageError ? (
@@ -154,6 +247,14 @@ export default function App() {
           muted
           aria-label="攝影機預覽"
         />
+        {/* Landmark overlay canvas — same size as preview container */}
+        <canvas
+          ref={canvasRef}
+          className="landmark-canvas"
+          width={96}
+          height={72}
+          aria-hidden="true"
+        />
         {cameraStatus !== 'ready' && (
           <div className="camera-overlay-label">
             {cameraStatus === 'requesting' && '等待權限…'}
@@ -169,6 +270,9 @@ export default function App() {
           {faceStatus === 'not_detected' && '未偵測到人臉'}
           {faceStatus === 'unavailable' && '偵測中…'}
         </div>
+      )}
+      {landmarkerFallbackMsg && (
+        <p className="camera-fallback-msg">⚠️ {landmarkerFallbackMsg}</p>
       )}
       {cameraError && (
         <p className="camera-error-msg">⚠️ {cameraError.message}</p>
@@ -289,6 +393,33 @@ export default function App() {
             )}
           </div>
 
+          {/* Task settings section */}
+          <div className="result-section">
+            <h3 className="result-section-title">本次任務設定</h3>
+            {session.taskSettings ? (
+              <>
+                <div className="result-stats">
+                  <div className="stat-row">
+                    <span className="stat-label">分類</span>
+                    <span className="stat-value">
+                      {CATEGORIES.find(c => c.id === session.taskSettings!.categoryId)?.label
+                        ?? session.taskSettings.categoryId}
+                    </span>
+                  </div>
+                  {RULE_KEYS.map(({ key, label }) => (
+                    <div key={key} className="stat-row">
+                      <span className="stat-label">{label}</span>
+                      <span className="stat-value">{session.taskSettings!.rules[key] ? '是' : '否'}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="result-note">本階段僅保存設定，尚未套用行為回顧規則。</p>
+              </>
+            ) : (
+              <p className="result-note">此紀錄未保存任務設定。</p>
+            )}
+          </div>
+
           {/* Timeline chart */}
           <div className="result-section result-section-wide">
             <h3 className="result-section-title">時間軸</h3>
@@ -344,6 +475,7 @@ export default function App() {
             <button className="btn btn-ghost btn-small" onClick={deleteData}>
               刪除本次資料
             </button>
+            <p className="privacy-note">（個人偏好設定不受影響）</p>
           </div>
           <p className="privacy-note">資料僅保存在目前瀏覽器，不保存影像。</p>
         </div>
@@ -353,13 +485,20 @@ export default function App() {
 
   // ── Idle page ──────────────────────────────────────────────────────────
   if (status === 'idle') {
+    const buildSessionSettings = (): SessionTaskSettings => ({
+      categoryId: selectedCategory,
+      rulesVersion: 1,
+      rules: { ...draft },
+    })
     const handleEnableCamera = () => {
+      const taskSettings = buildSessionSettings()
       enableCamera()
-      start({ cameraEnabled: true })
+      start({ cameraEnabled: true, taskSettings })
     }
     const handleNoCameraStart = () => {
+      const taskSettings = buildSessionSettings()
       disableCamera()
-      start({ cameraEnabled: false })
+      start({ cameraEnabled: false, taskSettings })
     }
 
     return (
@@ -386,6 +525,82 @@ export default function App() {
           <article className="article">
             <h2 className="article-title">{article.title}</h2>
             <p className="article-subtitle">{article.subtitle}</p>
+
+            {/* Task setup section */}
+            <div className="task-setup">
+              <div>
+                <h3 className="task-setup-title">本次任務設定</h3>
+                <p className="task-setup-note">設定用於後續事件回顧；不會封鎖操作，也不代表已確認專注或分心。</p>
+              </div>
+
+              <div className="task-category-row">
+                <label className="task-label" htmlFor="task-category">任務分類</label>
+                <select
+                  id="task-category"
+                  className="task-select"
+                  value={selectedCategory}
+                  onChange={e => {
+                    const cat = e.target.value as CategoryId
+                    setSelectedCategory(cat)
+                    setDraft(loadRulesOrDefault(cat))
+                    setPrefMsg(null)
+                  }}
+                >
+                  {CATEGORIES.map(c => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+                <span className="task-category-hint">切換分類將丟棄未儲存的修改</span>
+              </div>
+
+              <div className="task-toggle-list">
+                {RULE_KEYS.map(({ key, label }) => (
+                  <label key={key} className="task-toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={draft[key]}
+                      onChange={e => {
+                        const val = e.target.checked
+                        setDraft(d => ({ ...d, [key]: val }))
+                        setPrefMsg(null)
+                      }}
+                    />
+                    <span className="task-toggle-label">{label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="task-pref-actions">
+                <button
+                  className="btn btn-secondary btn-small"
+                  onClick={() => {
+                    const err = saveTaskPreferences(selectedCategory, draft)
+                    if (err) setPrefMsg({ type: 'error', text: err.message })
+                    else setPrefMsg({ type: 'success', text: '已儲存此分類的個人預設。' })
+                  }}
+                >
+                  儲存為個人預設
+                </button>
+                <button
+                  className="btn btn-ghost btn-small"
+                  onClick={() => {
+                    const sysDefault = getDefaultRules(selectedCategory)
+                    const err = clearTaskPreferences(selectedCategory)
+                    setDraft(sysDefault)
+                    if (err) setPrefMsg({ type: 'error', text: `草稿已恢復系統預設，但${err.message}` })
+                    else setPrefMsg({ type: 'success', text: '已恢復系統預設。' })
+                  }}
+                >
+                  恢復系統預設
+                </button>
+              </div>
+
+              {prefMsg && (
+                <p className={`task-pref-msg task-pref-msg-${prefMsg.type}`}>
+                  {prefMsg.type === 'success' ? '✓' : '⚠'} {prefMsg.text}
+                </p>
+              )}
+            </div>
 
             {/* Camera consent section */}
             <div className="camera-consent">
@@ -480,6 +695,74 @@ export default function App() {
             ))}
           </div>
         </article>
+
+        {/* ── Dev panel (only when camera is active) ── */}
+        {cameraStatus !== 'idle' && cameraStatus !== 'error' && (
+          <section className="dev-panel" aria-label="開發觀察">
+            <button
+              className="dev-panel-toggle"
+              onClick={() => setDevPanelOpen(o => !o)}
+              aria-expanded={devPanelOpen}
+            >
+              {devPanelOpen ? '▲' : '▼'} 開發觀察
+            </button>
+            {devPanelOpen && (
+              <div className="dev-panel-body">
+                <div className="dev-row">
+                  <span className="dev-label">引擎</span>
+                  <span className="dev-value dev-value-engine">
+                    {detectorKind === 'landmarker' ? 'Face Landmarker'
+                      : detectorKind === 'detector' ? 'Face Detector'
+                      : '未啟用'}
+                  </span>
+                </div>
+                {landmarkerFallbackMsg && (
+                  <p className="dev-fallback-note">{landmarkerFallbackMsg}</p>
+                )}
+                <div className="dev-row">
+                  <span className="dev-label">攝影機狀態</span>
+                  <span className="dev-value">{cameraStatus}</span>
+                </div>
+                {detectorKind === 'landmarker' && (() => {
+                  const frame = latestLandmarkFrameRef.current
+                  return (
+                    <>
+                      <div className="dev-row">
+                        <span className="dev-label">偵測到臉</span>
+                        <span className="dev-value">{frame?.faceDetected ? '是' : '否'}</span>
+                      </div>
+                      <div className="dev-row">
+                        <span className="dev-label">Landmarks</span>
+                        <span className="dev-value">{frame?.landmarks.length ?? 0} 點</span>
+                      </div>
+                      <div className="dev-row">
+                        <span className="dev-label">Blendshapes</span>
+                        <span className="dev-value">{frame?.blendshapes?.length ?? 0} 組</span>
+                      </div>
+                      <div className="dev-row">
+                        <span className="dev-label">Transform Matrix</span>
+                        <span className="dev-value">{frame?.transformationMatrix ? '有' : '無'}</span>
+                      </div>
+                      <div className="dev-divider" />
+                      <div className="dev-row dev-row-header">
+                        <span>Blendshape 係數（原始）</span>
+                      </div>
+                      {(['eyeBlinkLeft', 'eyeBlinkRight', 'jawOpen'] as const).map(name => {
+                        const bs = frame?.blendshapes?.find(b => b.categoryName === name)
+                        return (
+                          <div key={name} className="dev-row dev-row-mono">
+                            <span className="dev-label">{name}</span>
+                            <span className="dev-value">{bs ? bs.score.toFixed(3) : '無資料'}</span>
+                          </div>
+                        )
+                      })}
+                    </>
+                  )
+                })()}
+              </div>
+            )}
+          </section>
+        )}
       </main>
     </div>
   )

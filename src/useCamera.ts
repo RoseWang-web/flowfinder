@@ -2,10 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   CameraAdapter,
   FaceDetectorAdapter,
+  FaceLandmarkerAdapter,
+  FaceLandmarkResult,
   CameraError,
   parseCameraError,
   createRealCameraAdapter,
   resetDetectorError,
+  resetLandmarkerError,
 } from './camera'
 import type { EventType, SessionStatus } from './types'
 
@@ -24,6 +27,9 @@ export type FaceStatus =
   | 'not_detected'
   | 'unavailable'  // no valid observation (loading, paused, stale, etc.)
 
+/** Which engine is currently driving inference. */
+export type DetectorKind = 'landmarker' | 'detector' | null
+
 export interface CameraState {
   cameraStatus: CameraStatus
   faceStatus: FaceStatus
@@ -31,6 +37,22 @@ export interface CameraState {
   videoRef: React.RefObject<HTMLVideoElement | null>
   enableCamera: () => void
   disableCamera: () => void
+  // ── Dev panel extras ──────────────────────────────────────────────────
+  /** Which engine is active. null when camera is idle/error. */
+  detectorKind: DetectorKind
+  /** Set if Landmarker failed and we fell back to Detector. */
+  landmarkerFallbackMsg: string | null
+  /**
+   * Ref to the latest landmarker frame result.
+   * Updated in-memory on every detection tick; not persisted anywhere.
+   * null when using Detector fallback, camera is off, or no face is detected.
+   */
+  latestLandmarkFrameRef: React.RefObject<FaceLandmarkResult | null>
+  /**
+   * Monotonically increasing counter updated on every successful landmarker frame.
+   * Components can depend on this to know when latestLandmarkFrameRef changed.
+   */
+  landmarkFrameSeq: number
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -55,36 +77,35 @@ export function useCamera(options: UseCameraOptions): CameraState {
     adapter: injectedAdapter,
   } = options
 
-  // Keep adapter in a ref so openCamera always reads the latest (useful in tests)
   const adapterRef = useRef<CameraAdapter>(injectedAdapter ?? createRealCameraAdapter())
   adapterRef.current = injectedAdapter ?? adapterRef.current
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle')
   const [faceStatus, setFaceStatus] = useState<FaceStatus>('unavailable')
   const [cameraError, setCameraError] = useState<CameraError | null>(null)
+  const [detectorKind, setDetectorKind] = useState<DetectorKind>(null)
+  const [landmarkerFallbackMsg, setLandmarkerFallbackMsg] = useState<string | null>(null)
+  const [landmarkFrameSeq, setLandmarkFrameSeq] = useState(0)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const detectorRef = useRef<FaceDetectorAdapter | null>(null)
+  const landmarkerRef = useRef<FaceLandmarkerAdapter | null>(null)
+  const latestLandmarkFrameRef = useRef<FaceLandmarkResult | null>(null)
   const loopRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const staleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
 
-  // Ref-based status for use inside async callbacks/intervals
   const cameraStatusRef = useRef<CameraStatus>('idle')
   const sessionStatusRef = useRef(sessionStatus)
   sessionStatusRef.current = sessionStatus
 
-  // Avoid duplicate face_detection_changed events
   const lastFaceStatusRef = useRef<FaceStatus>('unavailable')
-
-  // Whether the user explicitly chose camera mode
   const cameraEnabledRef = useRef(false)
 
   const onSessionEventRef = useRef(onSessionEvent)
   onSessionEventRef.current = onSessionEvent
 
-  // Keep cameraStatusRef in sync whenever state updates
   const setAndSyncCameraStatus = useCallback((s: CameraStatus) => {
     cameraStatusRef.current = s
     setCameraStatus(s)
@@ -131,6 +152,13 @@ export function useCamera(options: UseCameraOptions): CameraState {
     }, STALE_THRESHOLD_MS)
   }, [emitFaceStatus])
 
+  const clearEngines = useCallback(() => {
+    detectorRef.current = null
+    landmarkerRef.current = null
+    latestLandmarkFrameRef.current = null
+    setDetectorKind(null)
+  }, [])
+
   // ── Detection loop ────────────────────────────────────────────────────
 
   const startLoop = useCallback(() => {
@@ -140,15 +168,23 @@ export function useCamera(options: UseCameraOptions): CameraState {
     loopRef.current = setInterval(() => {
       if (!mountedRef.current) return
       const video = videoRef.current
-      const detector = detectorRef.current
-      if (!video || !detector || sessionStatusRef.current !== 'running') return
+      if (!video || sessionStatusRef.current !== 'running') return
 
       const timestampMs = performance.now()
-      const result = detector.detect(video, timestampMs)
-      if (result === null) return // frame not ready
 
-      resetStaleTimer()
-      emitFaceStatus(result ? 'detected' : 'not_detected')
+      if (landmarkerRef.current) {
+        const result = landmarkerRef.current.detectWithLandmarks(video, timestampMs)
+        if (result === null) return // stale / not ready
+        resetStaleTimer()
+        latestLandmarkFrameRef.current = result
+        setLandmarkFrameSeq(s => s + 1)
+        emitFaceStatus(result.faceDetected ? 'detected' : 'not_detected')
+      } else if (detectorRef.current) {
+        const result = detectorRef.current.detect(video, timestampMs)
+        if (result === null) return
+        resetStaleTimer()
+        emitFaceStatus(result ? 'detected' : 'not_detected')
+      }
     }, DETECT_INTERVAL_MS)
   }, [stopLoop, resetStaleTimer, emitFaceStatus])
 
@@ -174,7 +210,7 @@ export function useCamera(options: UseCameraOptions): CameraState {
     try {
       stream = await adapter.getUserMedia()
     } catch (err) {
-      if (!mountedRef.current) return // late arrival after session ended
+      if (!mountedRef.current) return
       const camErr = parseCameraError(err)
       setCameraError(camErr)
       setAndSyncCameraStatus('error')
@@ -182,7 +218,6 @@ export function useCamera(options: UseCameraOptions): CameraState {
       return
     }
 
-    // Guard: session may have ended / user may have disabled camera while awaiting
     if (!mountedRef.current || !cameraEnabledRef.current) {
       stream.getTracks().forEach(t => t.stop())
       return
@@ -193,35 +228,64 @@ export function useCamera(options: UseCameraOptions): CameraState {
       videoRef.current.srcObject = stream
     }
 
-    // 2. Load model
     setAndSyncCameraStatus('loading')
-    let detector: FaceDetectorAdapter
-    try {
-      detector = await adapter.loadFaceDetector()
-    } catch (err) {
-      if (!mountedRef.current) {
+
+    // 2. Try Landmarker first (if adapter supports it)
+    let engineReady = false
+
+    if (adapter.loadFaceLandmarker) {
+      try {
+        const landmarker = await adapter.loadFaceLandmarker()
+        if (!mountedRef.current || !cameraEnabledRef.current) {
+          stream.getTracks().forEach(t => t.stop())
+          return
+        }
+        landmarkerRef.current = landmarker
+        detectorRef.current = null
+        setDetectorKind('landmarker')
+        engineReady = true
+      } catch {
+        // Landmarker failed — clean up partial state and fall through to Detector
+        landmarkerRef.current = null
+        if (!mountedRef.current || !cameraEnabledRef.current) {
+          stream.getTracks().forEach(t => t.stop())
+          return
+        }
+        setLandmarkerFallbackMsg('進階臉部觀察無法啟用，目前使用基本臉部偵測。')
+      }
+    }
+
+    // 3. Fall back to Detector if Landmarker not available or failed
+    if (!engineReady) {
+      let detector: FaceDetectorAdapter
+      try {
+        detector = await adapter.loadFaceDetector()
+      } catch (err) {
+        if (!mountedRef.current) {
+          stream.getTracks().forEach(t => t.stop())
+          return
+        }
+        const camErr = err as CameraError
+        setCameraError(camErr)
+        setAndSyncCameraStatus('error')
+        stopStream()
+        onSessionEventRef.current('camera_error', { kind: camErr.kind })
+        return
+      }
+
+      if (!mountedRef.current || !cameraEnabledRef.current) {
         stream.getTracks().forEach(t => t.stop())
         return
       }
-      const camErr = err as CameraError
-      setCameraError(camErr)
-      setAndSyncCameraStatus('error')
-      stopStream()
-      onSessionEventRef.current('camera_error', { kind: camErr.kind })
-      return
+      detectorRef.current = detector
+      landmarkerRef.current = null
+      setDetectorKind('detector')
     }
 
-    if (!mountedRef.current || !cameraEnabledRef.current) {
-      stream.getTracks().forEach(t => t.stop())
-      return
-    }
-
-    detectorRef.current = detector
     setAndSyncCameraStatus('ready')
     lastFaceStatusRef.current = 'unavailable'
     onSessionEventRef.current('camera_started')
 
-    // Start detecting only if session is currently running
     if (sessionStatusRef.current === 'running') {
       startLoop()
     } else {
@@ -234,7 +298,9 @@ export function useCamera(options: UseCameraOptions): CameraState {
   const enableCamera = useCallback(() => {
     cameraEnabledRef.current = true
     setCameraError(null)
+    setLandmarkerFallbackMsg(null)
     resetDetectorError()
+    resetLandmarkerError()
     openCamera()
   }, [openCamera])
 
@@ -244,11 +310,12 @@ export function useCamera(options: UseCameraOptions): CameraState {
     }
     cameraEnabledRef.current = false
     stopStream()
-    detectorRef.current = null
+    clearEngines()
+    latestLandmarkFrameRef.current = null
     setAndSyncCameraStatus('idle')
     setFaceStatus('unavailable')
     lastFaceStatusRef.current = 'unavailable'
-  }, [stopStream, setAndSyncCameraStatus])
+  }, [stopStream, clearEngines, setAndSyncCameraStatus])
 
   // ── React to session status changes ──────────────────────────────────
 
@@ -258,21 +325,19 @@ export function useCamera(options: UseCameraOptions): CameraState {
     if (sessionStatus === 'running') {
       const cs = cameraStatusRef.current
       if (cs === 'ready') {
-        // Resume detection after pause/checking_in
         emitFaceStatus('unavailable', 'resuming')
         onSessionEventRef.current('camera_started')
         startLoop()
       } else if (cs === 'off' || cs === 'idle') {
-        // Stream was explicitly closed on pause — reopen
         openCamera()
       }
-      // cs === 'requesting' | 'loading' | 'error': no-op; openCamera is in-flight or failed
     } else if (sessionStatus === 'paused' || sessionStatus === 'checking_in') {
       const cs = cameraStatusRef.current
       if (cs === 'ready') {
         stopLoop()
         stopStream()
-        detectorRef.current = null
+        clearEngines()
+        latestLandmarkFrameRef.current = null
         setAndSyncCameraStatus('off')
         emitFaceStatus('unavailable', sessionStatus)
         onSessionEventRef.current('camera_stopped', { reason: sessionStatus })
@@ -284,7 +349,8 @@ export function useCamera(options: UseCameraOptions): CameraState {
       }
       stopLoop()
       stopStream()
-      detectorRef.current = null
+      clearEngines()
+      latestLandmarkFrameRef.current = null
       setAndSyncCameraStatus('idle')
       setFaceStatus('unavailable')
       lastFaceStatusRef.current = 'unavailable'
@@ -300,6 +366,7 @@ export function useCamera(options: UseCameraOptions): CameraState {
       const visible = document.visibilityState === 'visible'
       if (!visible) {
         stopLoop()
+        latestLandmarkFrameRef.current = null
         emitFaceStatus('unavailable', 'page_hidden')
       } else if (sessionStatusRef.current === 'running') {
         const cs = cameraStatusRef.current
@@ -323,9 +390,9 @@ export function useCamera(options: UseCameraOptions): CameraState {
       mountedRef.current = false
       stopLoop()
       stopStream()
-      detectorRef.current = null
+      clearEngines()
     }
-  }, [stopLoop, stopStream])
+  }, [stopLoop, stopStream, clearEngines])
 
   return {
     cameraStatus,
@@ -334,5 +401,9 @@ export function useCamera(options: UseCameraOptions): CameraState {
     videoRef,
     enableCamera,
     disableCamera,
+    detectorKind,
+    landmarkerFallbackMsg,
+    latestLandmarkFrameRef,
+    landmarkFrameSeq,
   }
 }

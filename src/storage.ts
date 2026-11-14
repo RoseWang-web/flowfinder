@@ -1,6 +1,30 @@
-import { Session, SCHEMA_VERSION } from './types'
+import { Session, SCHEMA_VERSION, SessionTaskSettings, CategoryId } from './types'
 
 const KEY = 'flowfinder_session_v2'
+
+function validateTaskSettings(raw: unknown): SessionTaskSettings | undefined {
+  if (raw === undefined || raw === null || typeof raw !== 'object') return undefined
+  const obj = raw as Record<string, unknown>
+  if (obj.categoryId !== 'web_reading' && obj.categoryId !== 'study_notes') return undefined
+  if (obj.rulesVersion !== 1) return undefined
+  const rules = obj.rules
+  if (typeof rules !== 'object' || rules === null) return undefined
+  const r = rules as Record<string, unknown>
+  if (
+    typeof r.allowHeadDown !== 'boolean' ||
+    typeof r.allowTabSwitch !== 'boolean' ||
+    typeof r.allowWindowBlur !== 'boolean'
+  ) return undefined
+  return {
+    categoryId: obj.categoryId as CategoryId,
+    rulesVersion: 1,
+    rules: {
+      allowHeadDown: r.allowHeadDown,
+      allowTabSwitch: r.allowTabSwitch,
+      allowWindowBlur: r.allowWindowBlur,
+    },
+  }
+}
 
 export interface StorageError {
   kind: 'parse_error' | 'version_mismatch' | 'write_error' | 'invalid_structure'
@@ -55,7 +79,11 @@ export function loadSession(): LoadResult {
         },
       }
     }
-    return { ok: true, session: parsed as Session }
+    const session = parsed as Session
+    // Validate taskSettings if present — strip if corrupt so session core is preserved
+    const rawObj = parsed as Record<string, unknown>
+    session.taskSettings = validateTaskSettings(rawObj.taskSettings)
+    return { ok: true, session }
   } catch {
     return {
       ok: false,

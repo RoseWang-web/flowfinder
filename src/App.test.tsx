@@ -10,7 +10,7 @@ import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { saveSession } from './storage'
-import type { Session } from './types'
+import type { Session, SessionTaskSettings } from './types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -103,5 +103,44 @@ describe('Result page with timeline', () => {
     // On the result page, cameraStatus is 'idle' so no video is rendered.
     const videos = document.querySelectorAll('video')
     expect(videos.length).toBe(0)
+  })
+
+  it('result page shows task settings when session has taskSettings', () => {
+    const taskSettings: SessionTaskSettings = {
+      categoryId: 'study_notes',
+      rulesVersion: 1,
+      rules: { allowHeadDown: true, allowTabSwitch: false, allowWindowBlur: true },
+    }
+    saveSession(makeCompletedSession({ taskSettings }))
+    render(<App />)
+    expect(screen.getByText('本次任務設定')).toBeDefined()
+    expect(screen.getByText('學習／筆記')).toBeDefined()
+    expect(screen.getByText('本階段僅保存設定，尚未套用行為回顧規則。')).toBeDefined()
+  })
+
+  it('result page shows "此紀錄未保存任務設定" for session without taskSettings', () => {
+    saveSession(makeCompletedSession())
+    render(<App />)
+    expect(screen.getByText('此紀錄未保存任務設定。')).toBeDefined()
+  })
+
+  it('session with corrupt taskSettings still loads and shows timeline', () => {
+    const corruptSession = {
+      ...makeCompletedSession(),
+      taskSettings: { categoryId: 'unknown_cat', rulesVersion: 99, rules: null },
+    }
+    // Write raw so storage.ts receives the corrupt field
+    localStorage.setItem('flowfinder_session_v2', JSON.stringify(corruptSession))
+    render(<App />)
+    // Timeline still renders (session core is intact)
+    expect(screen.getByText('時間軸')).toBeDefined()
+    // Task settings treated as unavailable
+    expect(screen.getByText('此紀錄未保存任務設定。')).toBeDefined()
+  })
+
+  it('idle page shows task category selector', () => {
+    render(<App />)
+    expect(screen.getByText('本次任務設定')).toBeDefined()
+    expect(screen.getByRole('combobox')).toBeDefined()
   })
 })
