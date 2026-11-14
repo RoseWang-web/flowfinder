@@ -10,6 +10,9 @@ export default defineConfig({
       '@mediapipe/face_detection',
       'webgazer',
     ],
+    include: [
+      'localforage',
+    ],
   },
   test: {
     environment: 'jsdom',

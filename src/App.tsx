@@ -5,13 +5,11 @@ import {
   formatTime,
   READING_DURATION_MS,
 } from './useSession'
-import { useCamera } from './useCamera'
 import { useGaze } from './useGaze'
 import { GazeCalibration } from './GazeCalibration'
 import modelJson from './model.json'
 import { TimelineChart } from './TimelineChart'
 import { buildTimeline } from './timeline'
-import { LANDMARK_CONNECTIONS } from './camera'
 import {
   CheckInAnswer,
   SessionEvent,
@@ -176,22 +174,6 @@ export default function App() {
     articleRef,
   } = useSession()
 
-  const {
-    cameraStatus,
-    faceStatus,
-    cameraError,
-    videoRef,
-    enableCamera,
-    disableCamera,
-    detectorKind,
-    landmarkerFallbackMsg,
-    latestLandmarkFrameRef,
-    landmarkFrameSeq,
-  } = useCamera({
-    sessionStatus: status,
-    onSessionEvent: recordEvent,
-  })
-
   // Reading column, used to scale the line-return threshold
   const columnRef = useRef<HTMLElement | null>(null)
 
@@ -204,7 +186,6 @@ export default function App() {
   // ── Dev panel state ──────────────────────────────────────────────────
   const [devPanelOpen, setDevPanelOpen] = useState(false)
   const [gazeDotVisible, setGazeDotVisible] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   // ── Task draft state ─────────────────────────────────────────────────
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('web_reading')
@@ -222,69 +203,6 @@ export default function App() {
     }
   }, [status, session])
 
-  // Draw landmark overlay onto the small video canvas.
-  // Must account for object-fit:cover: landmarks are in raw video coordinates,
-  // but the preview clips/scales the video to fit 96×72 px.
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    if (!devPanelOpen || cameraStatus !== 'ready') return
-    const frame = latestLandmarkFrameRef.current
-    if (!frame || !frame.faceDetected || frame.landmarks.length < 478) return
-
-    const CW = canvas.width   // 96
-    const CH = canvas.height  // 72
-
-    // Read actual video dimensions to handle object-fit: cover correctly.
-    const video = videoRef.current
-    const vW = (video?.videoWidth  || 0) > 0 ? video!.videoWidth  : CW
-    const vH = (video?.videoHeight || 0) > 0 ? video!.videoHeight : CH
-
-    // Compute the scale and offsets that object-fit: cover uses.
-    // scale is chosen so the video fills the container completely;
-    // the smaller dimension fits exactly, the larger overflows (is clipped).
-    const scale = Math.max(CW / vW, CH / vH)
-    const ox = (CW - vW * scale) / 2  // negative when video is wider
-    const oy = (CH - vH * scale) / 2  // negative when video is taller
-
-    // Map normalized landmark to canvas pixel, accounting for cover offset and mirror.
-    // The video is CSS-mirrored (transform: scaleX(-1)); the canvas is not.
-    // So we flip x: canvasX = CW - displayedX.
-    const lx = (i: number): number => CW - (frame.landmarks[i].x * vW * scale + ox)
-    const ly = (i: number): number => frame.landmarks[i].y * vH * scale + oy
-
-    // Eye outlines — green
-    ctx.strokeStyle = '#4ade80'
-    ctx.lineWidth = 1.2
-    for (const conn of [...LANDMARK_CONNECTIONS.RIGHT_EYE, ...LANDMARK_CONNECTIONS.LEFT_EYE]) {
-      ctx.beginPath()
-      ctx.moveTo(lx(conn.start), ly(conn.start))
-      ctx.lineTo(lx(conn.end), ly(conn.end))
-      ctx.stroke()
-    }
-
-    // Iris outlines — sky blue
-    ctx.strokeStyle = '#38bdf8'
-    ctx.lineWidth = 1.2
-    for (const conn of [...LANDMARK_CONNECTIONS.RIGHT_IRIS, ...LANDMARK_CONNECTIONS.LEFT_IRIS]) {
-      ctx.beginPath()
-      ctx.moveTo(lx(conn.start), ly(conn.start))
-      ctx.lineTo(lx(conn.end), ly(conn.end))
-      ctx.stroke()
-    }
-
-    // Iris center dots — 2.5 px radius
-    ctx.fillStyle = '#38bdf8'
-    for (const ci of [LANDMARK_CONNECTIONS.RIGHT_IRIS_CENTER, LANDMARK_CONNECTIONS.LEFT_IRIS_CENTER]) {
-      ctx.beginPath()
-      ctx.arc(lx(ci), ly(ci), 2.5, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  }, [landmarkFrameSeq, devPanelOpen, cameraStatus, latestLandmarkFrameRef, videoRef])
-
   // ── Dashboard view (all hooks above, conditional render here) ────────
   if (appView === 'dashboard') {
     return (
@@ -301,51 +219,6 @@ export default function App() {
   const errorBanner = storageError ? (
     <div className={`error-banner ${storageError.isLoadError ? '' : 'error-write'}`}>
       ⚠️ {storageError.message}
-    </div>
-  ) : null
-
-  // ── Camera indicator (reading page) ─────────────────────────────────
-  const cameraIndicator = cameraStatus !== 'idle' ? (
-    <div className="camera-indicator">
-      <div className={`camera-preview-wrap camera-status-${cameraStatus}`}>
-        <video
-          ref={videoRef}
-          className="camera-preview"
-          autoPlay
-          playsInline
-          muted
-          aria-label="攝影機預覽"
-        />
-        {/* Landmark overlay canvas — same size as preview container */}
-        <canvas
-          ref={canvasRef}
-          className="landmark-canvas"
-          width={96}
-          height={72}
-          aria-hidden="true"
-        />
-        {cameraStatus !== 'ready' && (
-          <div className="camera-overlay-label">
-            {cameraStatus === 'requesting' && '等待權限…'}
-            {cameraStatus === 'loading' && '模型載入中…'}
-            {cameraStatus === 'off' && '已暫停'}
-            {cameraStatus === 'error' && '錯誤'}
-          </div>
-        )}
-      </div>
-      {cameraStatus === 'ready' && (
-        <div className={`face-status face-status-${faceStatus}`}>
-          {faceStatus === 'detected' && '偵測到人臉'}
-          {faceStatus === 'not_detected' && '未偵測到人臉'}
-          {faceStatus === 'unavailable' && '偵測中…'}
-        </div>
-      )}
-      {landmarkerFallbackMsg && (
-        <p className="camera-fallback-msg">⚠️ {landmarkerFallbackMsg}</p>
-      )}
-      {cameraError && (
-        <p className="camera-error-msg">⚠️ {cameraError.message}</p>
-      )}
     </div>
   ) : null
 
@@ -416,7 +289,6 @@ export default function App() {
     const checkIn = session.checkIn
     const checkInNeverShown = !checkIn
     const activeDisplay = msToDisplay(session.activeReadingMs)
-    const hasCameraData = session.cameraEnabled === true
 
     // Events to show (deduplicate scroll noise)
     const shownEvents = session.events.filter(
@@ -617,9 +489,6 @@ export default function App() {
           {/* Event log */}
           <div className="result-section">
             <h3 className="result-section-title">事件紀錄</h3>
-            {!hasCameraData && !session.gazeEnabled && (
-              <p className="result-note camera-no-data">此紀錄沒有攝影機資料。</p>
-            )}
             <div className="event-list">
               {allDisplayEvents.map(e => (
                 <div key={e.id} className="event-row">
@@ -681,13 +550,7 @@ export default function App() {
       rulesVersion: 1,
       rules: { ...draft },
     })
-    const handleEnableCamera = () => {
-      const taskSettings = buildSessionSettings()
-      enableCamera()
-      start({ cameraEnabled: true, taskSettings })
-    }
     const handleStartGaze = () => {
-      disableCamera()
       void gaze.startTracker()
     }
     const handleGazeCalibrated = (summary: CalibrationSummary) => {
@@ -699,10 +562,8 @@ export default function App() {
         taskSettings: buildSessionSettings(),
       })
     }
-    const handleNoCameraStart = () => {
-      const taskSettings = buildSessionSettings()
-      disableCamera()
-      start({ cameraEnabled: false, taskSettings })
+    const handleNoGazeStart = () => {
+      start({ cameraEnabled: false, taskSettings: buildSessionSettings() })
     }
 
     return (
@@ -823,25 +684,9 @@ export default function App() {
               )}
             </div>
 
-            {/* Camera consent section */}
-            <div className="camera-consent">
-              <p className="camera-consent-title">攝影機輔助（選擇性）</p>
-              <p className="camera-consent-desc">
-                啟用後可偵測閱讀期間是否有面部出現，僅記錄有無人在螢幕前，不保存任何影像。
-              </p>
-              <div className="camera-consent-actions">
-                <button className="btn btn-primary" onClick={handleEnableCamera}>
-                  啟用攝影機
-                </button>
-                <button className="btn btn-secondary" onClick={handleNoCameraStart}>
-                  不使用攝影機繼續
-                </button>
-              </div>
-            </div>
-
-            {/* Eye-tracking (experimental) */}
+            {/* Eye-tracking section */}
             <div className="camera-consent gaze-consent">
-              <p className="camera-consent-title">眼動追蹤（實驗性）</p>
+              <p className="camera-consent-title">眼動追蹤</p>
               <p className="camera-consent-desc">
                 用攝影機估計視線位置，根據換行頻率與閱讀速度估計專注度。開始前需要約 1 分鐘校準。
                 影像只在瀏覽器中處理，不保存影像；僅保存估計數值。
@@ -854,6 +699,9 @@ export default function App() {
                   disabled={gaze.gazeStatus === 'starting' || gaze.gazeStatus === 'calibrating'}
                 >
                   啟用眼動追蹤
+                </button>
+                <button className="btn btn-secondary" onClick={handleNoGazeStart}>
+                  不使用眼動追蹤繼續
                 </button>
               </div>
               {gaze.gazeError && (
@@ -897,8 +745,6 @@ export default function App() {
                 style={{ width: `${progressPct}%` }}
               />
             </div>
-            {/* Camera indicator in header */}
-            {cameraIndicator}
             {gazeIndicator}
             <div className="controls">
               {status === 'running' && (
@@ -940,8 +786,8 @@ export default function App() {
           </div>
         </article>
 
-        {/* ── Dev panel (only when camera or eye-tracking is active) ── */}
-        {((cameraStatus !== 'idle' && cameraStatus !== 'error') || gazeLive) && (
+        {/* ── Dev panel (only when eye-tracking is active) ── */}
+        {gazeLive && (
           <section className="dev-panel" aria-label="開發觀察">
             <button
               className="dev-panel-toggle"
@@ -952,58 +798,7 @@ export default function App() {
             </button>
             {devPanelOpen && (
               <div className="dev-panel-body">
-                <div className="dev-row">
-                  <span className="dev-label">引擎</span>
-                  <span className="dev-value dev-value-engine">
-                    {detectorKind === 'landmarker' ? 'Face Landmarker'
-                      : detectorKind === 'detector' ? 'Face Detector'
-                      : '未啟用'}
-                  </span>
-                </div>
-                {gazeLive && gazeDevRows}
-                {landmarkerFallbackMsg && (
-                  <p className="dev-fallback-note">{landmarkerFallbackMsg}</p>
-                )}
-                <div className="dev-row">
-                  <span className="dev-label">攝影機狀態</span>
-                  <span className="dev-value">{cameraStatus}</span>
-                </div>
-                {detectorKind === 'landmarker' && (() => {
-                  const frame = latestLandmarkFrameRef.current
-                  return (
-                    <>
-                      <div className="dev-row">
-                        <span className="dev-label">偵測到臉</span>
-                        <span className="dev-value">{frame?.faceDetected ? '是' : '否'}</span>
-                      </div>
-                      <div className="dev-row">
-                        <span className="dev-label">Landmarks</span>
-                        <span className="dev-value">{frame?.landmarks.length ?? 0} 點</span>
-                      </div>
-                      <div className="dev-row">
-                        <span className="dev-label">Blendshapes</span>
-                        <span className="dev-value">{frame?.blendshapes?.length ?? 0} 組</span>
-                      </div>
-                      <div className="dev-row">
-                        <span className="dev-label">Transform Matrix</span>
-                        <span className="dev-value">{frame?.transformationMatrix ? '有' : '無'}</span>
-                      </div>
-                      <div className="dev-divider" />
-                      <div className="dev-row dev-row-header">
-                        <span>Blendshape 係數（原始）</span>
-                      </div>
-                      {(['eyeBlinkLeft', 'eyeBlinkRight', 'jawOpen'] as const).map(name => {
-                        const bs = frame?.blendshapes?.find(b => b.categoryName === name)
-                        return (
-                          <div key={name} className="dev-row dev-row-mono">
-                            <span className="dev-label">{name}</span>
-                            <span className="dev-value">{bs ? bs.score.toFixed(3) : '無資料'}</span>
-                          </div>
-                        )
-                      })}
-                    </>
-                  )
-                })()}
+                {gazeDevRows}
               </div>
             )}
           </section>

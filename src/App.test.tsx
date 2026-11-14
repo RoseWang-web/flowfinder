@@ -56,29 +56,12 @@ describe('Result page with timeline', () => {
     expect(screen.getByText('本次經過時間')).toBeDefined()
   })
 
-  it('shows "此紀錄沒有攝影機資料" for session without camera', () => {
-    saveSession(makeCompletedSession({ cameraEnabled: false }))
-    render(<App />)
-    expect(screen.getByText('此紀錄沒有攝影機資料。')).toBeDefined()
-  })
-
-  it('does not show no-camera note when session has camera_started event', () => {
-    const events: Session['events'] = [
-      { id: 'e1', sessionId: 's1', eventType: 'session_start', elapsedMs: 0, activeReadingMs: 0, data: { visible: true } },
-      { id: 'e2', sessionId: 's1', eventType: 'camera_started', elapsedMs: 1_000, activeReadingMs: 0 },
-      { id: 'e3', sessionId: 's1', eventType: 'session_end', elapsedMs: 60_000, activeReadingMs: 55_000 },
-    ]
-    saveSession(makeCompletedSession({ cameraEnabled: true, events }))
-    render(<App />)
-    expect(screen.queryByText('此紀錄沒有攝影機資料。')).toBeNull()
-  })
-
   it('delete button clears result page and returns to consent screen', async () => {
     saveSession(makeCompletedSession())
     render(<App />)
     const deleteBtn = screen.getByRole('button', { name: '刪除本次資料' })
     await act(async () => { await userEvent.click(deleteBtn) })
-    expect(screen.getByText('攝影機輔助（選擇性）')).toBeDefined()
+    expect(screen.getByText('眼動追蹤')).toBeDefined()
     expect(localStorage.getItem('flowfinder_session_v2')).toBeNull()
   })
 
@@ -93,7 +76,7 @@ describe('Result page with timeline', () => {
     // Error banner visible
     expect(screen.getByText(/無法刪除保存紀錄/)).toBeDefined()
     // Memory cleared — app is on idle page
-    expect(screen.getByText('攝影機輔助（選擇性）')).toBeDefined()
+    expect(screen.getByText('眼動追蹤')).toBeDefined()
   })
 
   it('result page renders no camera video element (stream is idle)', () => {
