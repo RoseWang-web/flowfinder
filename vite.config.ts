@@ -1,8 +1,11 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   plugins: [react()],
+  // The browser extension (extension/) imports shared modules as @core/*; its tests run here too
+  resolve: { alias: { '@core': fileURLToPath(new URL('./src', import.meta.url)) } },
   optimizeDeps: {
     // Keep tasks-vision/face_detection excluded: camera.ts still exists in src/
     // and Vite would otherwise eagerly bundle their WASM runners, causing

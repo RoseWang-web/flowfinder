@@ -1,0 +1,43 @@
+html, body, #root { height: 100%; }
+body { background: #EDE6DA; overflow: hidden; }
+.calib { position: relative; height: 100%; }
+.cancel { position: absolute; top: 16px; right: 20px; z-index: 2; font-size: 13px; }
+
+.card {
+  background: var(--cream); border: 1.5px solid var(--ink); border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(31, 46, 63, .22); padding: 24px 28px; width: 420px; max-width: calc(100% - 32px);
+}
+.center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; }
+.card h1 { font-size: 26px; margin: 10px 0 6px; }
+.card p { font-size: 14px; line-height: 1.5; margin: 8px 0; }
+.small { font-size: 12px !important; }
+
+.preview { position: relative; width: 320px; height: 240px; margin: 14px auto 4px; border-radius: 10px; overflow: hidden; background: #000; }
+.preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.oval { position: absolute; left: 50%; top: 50%; width: 140px; height: 180px; transform: translate(-50%, -50%); border: 2px dashed rgba(255, 255, 255, .85); border-radius: 50%; }
+
+.facestate { display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 13px !important; }
+.camdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: transparent; border: 1.5px dashed var(--gray); }
+.facestate.ok .camdot { background: var(--olive); border: 0; }
+.facestate.weak .camdot { background: var(--mustard); border: 0; }
+.facestate.none .camdot { background: var(--red); border: 0; }
+
+.hint {
+  position: absolute; left: 50%; top: 38%; transform: translateX(-50%);
+  font-size: 15px; font-weight: 600; color: var(--muted); pointer-events: none; text-align: center;
+}
+.dot {
+  position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%;
+  border: 3px solid #fff; display: grid; place-items: center; padding: 0;
+  color: #fff; font: 700 12px var(--sans);
+}
+.dot.red { background: var(--red); box-shadow: 0 0 0 2px var(--red); }
+.dot.blue { background: var(--navy); box-shadow: 0 0 0 2px var(--navy); }
+.dot.hidden { visibility: hidden; }
+
+.sumstats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; text-align: left; }
+.sumstats div { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.sumstats small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.sumstats b { font-family: var(--serif); font-weight: 400; font-size: 20px; }
+.row2 { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.error { color: var(--red); }

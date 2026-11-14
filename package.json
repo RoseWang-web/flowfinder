@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:ext": "tsc -p extension/tsconfig.json && vite build -c extension/vite.config.ts && vite build -c extension/vite.content.config.ts"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.14",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.10",
+    "@types/chrome": "^0.3.7",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.7.0",
