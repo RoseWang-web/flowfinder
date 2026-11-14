@@ -633,11 +633,7 @@
 
 .cal-gh span {
   position: relative;
-  top: -7px;
-}
-
-.cal-gh:first-child span {
-  top: 2px;
+  top: 0;
 }
 
 /* ── Day view — time grid ─────────────────────────────────────────────────── */

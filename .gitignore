@@ -3,3 +3,4 @@ dist
 *.local
 *.tsbuildinfo
 .claude/
+.DS_Store
