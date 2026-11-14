@@ -85,7 +85,7 @@ export function createWebGazerTracker(): GazeTracker {
     async begin() {
       if (running) return
       if (!wg) {
-        const mod = await import('webgazer')
+        const mod = await import(/* @vite-ignore */ 'webgazer')
         wg = (mod.default ?? mod) as unknown as WebGazerModule
         wg.params.faceMeshSolutionPath = FACE_MESH_CDN
       }
