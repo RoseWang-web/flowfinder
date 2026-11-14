@@ -1,5 +1,5 @@
 import { useState, useId } from 'react'
-import type { TimelineData, TimeSegment, TimeMarker, AttentionPoint } from './timeline'
+import type { TimelineData, TimeSegment, AttentionPoint } from './timeline'
 import { fmtMs } from './timeline'
 
 // ── Layout constants ──────────────────────────────────────────────────────
@@ -15,10 +15,10 @@ const GAP     = 10        // vertical gap between tracks
 const TICK_STEP_S = 30    // axis ticks every 30 s
 
 function trackY(i: number) { return Y0 + AXIS_H + 6 + i * (TRACK_H + GAP) }
-const BASE_SVG_H = trackY(3) + TRACK_H + 10
+const BASE_SVG_H = trackY(2) + TRACK_H + 10
 
-// Attention band (eye-tracking mode only), drawn below the 4 tracks
-const ATT_Y = trackY(4)
+// Attention band (eye-tracking mode only), drawn below the 2 tracks
+const ATT_Y = trackY(2)
 const ATT_H = 72
 const GAZE_SVG_H = ATT_Y + ATT_H + 10
 /**
@@ -58,19 +58,6 @@ const VISIBILITY_COLOUR: Record<string, string> = {
   unknown: '#e5e7eb',
 }
 
-const FACE_COLOUR: Record<string, string> = {
-  detected:     '#6ee7b7',
-  not_detected: '#94a3b8',
-  unavailable:  '#e5e7eb',
-  no_camera:    '#f3f4f6',
-}
-
-const MARKER_COLOUR: Record<string, string> = {
-  check_in_shown:    '#f59e0b',
-  check_in_answered: '#3b82f6',
-  check_in_skipped:  '#9ca3af',
-  scroll:            '#cbd5e1',
-}
 
 // ── Labels ────────────────────────────────────────────────────────────────
 
@@ -81,41 +68,21 @@ const KIND_LABEL: Record<string, string> = {
   unknown:     'Unknown',
   visible:     'Visible',
   hidden:      'Hidden',
-  detected:    'Face detected',
-  not_detected:'No face',
-  unavailable: 'Unavailable',
-  no_camera:   'No camera',
-}
-
-const MARKER_LABEL: Record<string, string> = {
-  check_in_shown:    'Check-in shown',
-  check_in_answered: 'Check-in answered',
-  check_in_skipped:  'Check-in skipped',
-  scroll:            'Scroll',
 }
 
 // ── Selection types ───────────────────────────────────────────────────────
 
 type Selection =
   | { kind: 'segment'; track: string; seg: TimeSegment }
-  | { kind: 'marker'; marker: TimeMarker }
   | { kind: 'attention'; point: AttentionPoint }
 
 // ── Legend ────────────────────────────────────────────────────────────────
 
 const LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' }> = [
-  { label: 'Reading',          colour: '#3b82f6' },
-  { label: 'Paused',           colour: '#f59e0b' },
-  { label: 'Check-in',         colour: '#8b5cf6' },
-  { label: 'Page visible',     colour: '#93c5fd' },
-  { label: 'Page hidden',      colour: '#6b7280' },
-  { label: 'Face detected',    colour: '#6ee7b7' },
-  { label: 'No face',          colour: '#94a3b8' },
-  { label: 'Unavailable',      colour: '#e5e7eb' },
-  { label: 'Check-in shown',   colour: '#f59e0b', shape: 'diamond' },
-  { label: 'Check-in answered',colour: '#3b82f6', shape: 'diamond' },
-  { label: 'Check-in skipped', colour: '#9ca3af', shape: 'diamond' },
-  { label: 'Scroll',           colour: '#cbd5e1', shape: 'line' },
+  { label: 'Reading',      colour: '#3b82f6' },
+  { label: 'Paused',       colour: '#f59e0b' },
+  { label: 'Page visible', colour: '#93c5fd' },
+  { label: 'Page hidden',  colour: '#6b7280' },
 ]
 
 const GAZE_LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' | 'dot' }> = [
@@ -176,20 +143,12 @@ export function TimelineChart({ data }: Props) {
     trendRuns[trendRuns.length - 1].push(p)
     prevOk = p
   }
-  const checkInShownMs = data.actionMarkers.find(m => m.kind === 'check_in_shown')?.ms ?? null
   const legend = hasGaze ? [...LEGEND, ...GAZE_LEGEND] : LEGEND
-
-  const selectMarker = (marker: TimeMarker) =>
-    setSelection(prev =>
-      prev?.kind === 'marker' && prev.marker === marker ? null : { kind: 'marker', marker },
-    )
 
   // ── Track rows ─────────────────────────────────────────────────────────
   const tracks: Array<{ label: string; id: string; segs: TimeSegment[]; colorMap: Record<string, string> }> = [
-    { label: 'Status',     id: 'session',    segs: data.sessionStatusTrack,   colorMap: SESSION_COLOUR },
-    { label: 'Visibility', id: 'visibility', segs: data.pageVisibilityTrack,  colorMap: VISIBILITY_COLOUR },
-    { label: 'Face',       id: 'face',       segs: data.faceObservationTrack, colorMap: FACE_COLOUR },
-    { label: 'Actions',    id: 'actions',    segs: [],                         colorMap: {} },
+    { label: 'Status',     id: 'session',    segs: data.sessionStatusTrack,  colorMap: SESSION_COLOUR },
+    { label: 'Visibility', id: 'visibility', segs: data.pageVisibilityTrack, colorMap: VISIBILITY_COLOUR },
   ]
 
   return (
@@ -226,7 +185,6 @@ export function TimelineChart({ data }: Props) {
           {/* ── Track rows ── */}
           {tracks.map((track, ti) => {
             const y = trackY(ti)
-            const isActions = track.id === 'actions'
 
             return (
               <g key={track.id}>
@@ -254,12 +212,12 @@ export function TimelineChart({ data }: Props) {
                   />
                 ))}
 
-                {/* Segments (not for actions track) */}
-                {!isActions && track.segs.map((seg, si) => {
+                {/* Segments */}
+                {track.segs.map((seg, si) => {
                   const x1 = tx(seg.startMs)
                   const x2 = tx(seg.endMs)
                   const w = Math.max(x2 - x1, 1)
-                  const fill = seg.kind === 'unknown' || seg.kind === 'unavailable'
+                  const fill = seg.kind === 'unknown'
                     ? `url(#${hatchId})`
                     : (track.colorMap[seg.kind] ?? '#e5e7eb')
                   const isSelected =
@@ -285,40 +243,6 @@ export function TimelineChart({ data }: Props) {
                     />
                   )
                 })}
-
-                {/* Action markers */}
-                {isActions && data.actionMarkers.map((m, mi) => {
-                  const x = tx(m.ms)
-                  const colour = MARKER_COLOUR[m.kind] ?? '#94a3b8'
-                  const isSelected = selection?.kind === 'marker' && selection.marker === m
-                  return (
-                    <g
-                      key={mi}
-                      style={{ cursor: 'pointer', outline: 'none' }}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`${MARKER_LABEL[m.kind] ?? m.kind}, ${fmtMs(m.ms)}${m.detail ? ', ' + m.detail : ''}`}
-                      aria-pressed={isSelected}
-                      onClick={() => selectMarker(m)}
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMarker(m) } }}
-                    >
-                      <line
-                        x1={x} y1={y + 1} x2={x} y2={y + TRACK_H - 1}
-                        stroke={isSelected ? '#1d4ed8' : colour}
-                        strokeWidth={isSelected ? 3 : 2}
-                      />
-                      {/* Diamond top */}
-                      <polygon
-                        points={`${x},${y + 1} ${x - 4},${y + 7} ${x},${y + 13} ${x + 4},${y + 7}`}
-                        fill={isSelected ? '#1d4ed8' : colour}
-                      />
-                      {/* Count badge */}
-                      {m.detail && m.kind === 'scroll' && (
-                        <text x={x + 5} y={y + 11} fontSize={8} fill="#9ca3af">{m.detail}</text>
-                      )}
-                    </g>
-                  )
-                })}
               </g>
             )
           })}
@@ -340,13 +264,6 @@ export function TimelineChart({ data }: Props) {
                 x1={LABEL_W} y1={focusY(0.5)} x2={LABEL_W + TL_W} y2={focusY(0.5)}
                 stroke="#e5e7eb" strokeWidth={1} strokeDasharray="4 3"
               />
-              {/* Check-in prompt, to compare with what the model saw just before */}
-              {checkInShownMs !== null && (
-                <line
-                  x1={tx(checkInShownMs)} y1={ATT_Y} x2={tx(checkInShownMs)} y2={ATT_Y + ATT_H}
-                  stroke={MARKER_COLOUR.check_in_shown} strokeWidth={1.5} strokeDasharray="3 3"
-                />
-              )}
               {/* Windows without a score: small bars at the bottom */}
               {data.attentionTrack.filter(p => p.status !== 'ok').map((p, i) => (
                 <rect
@@ -404,16 +321,6 @@ export function TimelineChart({ data }: Props) {
                 <span className="tl-detail-kind">{KIND_LABEL[seg.kind] ?? seg.kind}</span>
                 <span className="tl-detail-time">{fmtMs(seg.startMs)} → {fmtMs(seg.endMs)}</span>
                 <span className="tl-detail-dur">Duration {fmtMs(seg.endMs - seg.startMs)}</span>
-              </>
-            )
-          })()}
-          {selection.kind === 'marker' && (() => {
-            const m = selection.marker
-            return (
-              <>
-                <span className="tl-detail-track">{MARKER_LABEL[m.kind] ?? m.kind}</span>
-                <span className="tl-detail-time">{fmtMs(m.ms)}</span>
-                {m.detail && <span className="tl-detail-kind">{m.detail}</span>}
               </>
             )
           })()}

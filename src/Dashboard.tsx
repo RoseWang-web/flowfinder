@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { TimelineChart } from './TimelineChart'
 import { buildTimeline } from './timeline'
+import { SessionResultPage } from './SessionResultPage'
 import {
   loadHistory,
   deleteHistoryEntry,
@@ -689,9 +690,10 @@ function SummaryBar({ entries }: { entries: HistoryEntry[] }) {
 
 export interface DashboardProps {
   onStartNewSession: () => void
+  initialSessionId?: string | null
 }
 
-export function Dashboard({ onStartNewSession }: DashboardProps) {
+export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProps) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const pageRef = useRef<HTMLDivElement>(null)
 
@@ -744,6 +746,18 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
   const allEntries = historyData.entries
   const filteredEntries = filterByCategory(allEntries, categoryFilter)
   const byDay = groupEntriesByDay(filteredEntries, tz)
+
+  // Auto-select entry when navigated via #session/{id}
+  useEffect(() => {
+    if (!initialSessionId) return
+    const entry = allEntries.find(e => e.session.sessionId === initialSessionId)
+    if (entry) setSelectedEntry(entry)
+  }, [initialSessionId, allEntries])
+
+  // Navigate to session detail via hash
+  const handleSelectEntry = useCallback((entry: HistoryEntry) => {
+    window.location.hash = '#session/' + entry.session.sessionId
+  }, [])
 
   // Week / month navigation
   const focusYM = parseYM(focusDate)
@@ -822,6 +836,9 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
     const result = loadHistory()
     if (result.ok) setHistoryData(result.data)
     setSelectedEntry(null)
+    if (window.location.hash.startsWith('#session/')) {
+      window.location.hash = '#dashboard'
+    }
   }, [])
 
   // ── Manual override ───────────────────────────────────────────────────
@@ -868,6 +885,17 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
 
   // ── Empty state ───────────────────────────────────────────────────────
   const isRealEmpty = mode === 'real' && allEntries.length === 0 && !loadError
+
+  // ── Full-screen session view (hash navigation) ────────────────────────
+  if (initialSessionId && selectedEntry) {
+    return (
+      <SessionResultPage
+        session={selectedEntry.session}
+        onBack={() => { window.location.hash = '#dashboard' }}
+        onViewHistory={() => { window.location.hash = '#dashboard' }}
+      />
+    )
+  }
 
   return (
     <div className="dashboard-page" ref={pageRef}>
@@ -983,7 +1011,7 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
               <DayView
                 date={focusDate}
                 entries={byDay.get(focusDate) ?? []}
-                onSelectEntry={setSelectedEntry}
+                onSelectEntry={handleSelectEntry}
               />
             )}
             {view === 'week' && (
@@ -991,7 +1019,7 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
                 weekDates={currentWeekDates}
                 byDay={byDay}
                 onSelectDay={handleSelectDay}
-                onSelectEntry={setSelectedEntry}
+                onSelectEntry={handleSelectEntry}
               />
             )}
             {view === 'month' && (
@@ -1004,8 +1032,8 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
             )}
           </div>
 
-          {/* Detail panel */}
-          {selectedEntry && (
+          {/* Detail panel — kept for non-hash fallback (demo mode) */}
+          {selectedEntry && !initialSessionId && (
             <div className="detail-overlay">
               <SessionDetail
                 entry={selectedEntry}

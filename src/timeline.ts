@@ -16,21 +16,6 @@ export interface TimeSegment {
   kind:
     | 'reading' | 'paused' | 'checking_in' | 'unknown'    // session status
     | 'visible' | 'hidden'                                  // page visibility
-    | 'detected' | 'not_detected' | 'unavailable'          // face observation
-    | 'no_camera'                                           // camera not used
-}
-
-export type MarkerKind =
-  | 'check_in_shown'
-  | 'check_in_answered'
-  | 'check_in_skipped'
-  | 'scroll'
-
-export interface TimeMarker {
-  ms: number
-  kind: MarkerKind
-  label: string
-  detail?: string
 }
 
 export type AttentionStatus = 'ok' | 'warming_up' | 'low_quality'
@@ -66,11 +51,8 @@ export interface TimelineData {
   /** Total timeline duration (elapsedMs); always ≥ 1 */
   totalMs: number
   activeReadingMs: number
-  hasCameraData: boolean
   sessionStatusTrack: TimeSegment[]
   pageVisibilityTrack: TimeSegment[]
-  faceObservationTrack: TimeSegment[]
-  actionMarkers: TimeMarker[]
   hasGazeData: boolean
   attentionTrack: AttentionPoint[]
   checkInAttention: CheckInAttention | null
@@ -92,22 +74,13 @@ export function buildTimeline(session: Session): TimelineData {
       a.elapsedMs !== b.elapsedMs ? a.elapsedMs - b.elapsedMs : a._idx - b._idx,
     )
 
-  const hasCameraData =
-    session.cameraEnabled === true ||
-    events.some(e => e.eventType === 'camera_started')
-
   const attentionTrack = buildAttentionTrack(events, totalMs)
 
   return {
     totalMs,
     activeReadingMs: session.activeReadingMs,
-    hasCameraData,
     sessionStatusTrack: buildSessionStatusTrack(events, totalMs),
     pageVisibilityTrack: buildPageVisibilityTrack(events, totalMs),
-    faceObservationTrack: hasCameraData
-      ? buildFaceObservationTrack(events, totalMs)
-      : [{ startMs: 0, endMs: totalMs, kind: 'no_camera' }],
-    actionMarkers: buildActionMarkers(events, totalMs),
     hasGazeData: session.gazeEnabled === true || attentionTrack.length > 0,
     attentionTrack,
     checkInAttention: buildCheckInAttention(events, attentionTrack),
@@ -185,77 +158,7 @@ function buildPageVisibilityTrack(events: SortedEvent[], totalMs: number): TimeS
   })
 }
 
-// ── Track C: Face observation ─────────────────────────────────────────────
-
-function buildFaceObservationTrack(events: SortedEvent[], totalMs: number): TimeSegment[] {
-  // Rules:
-  // - Start at 'unavailable' (camera might not have loaded yet).
-  // - face_detection_changed carries the authoritative new status.
-  // - camera_stopped / camera_error close any open detection → 'unavailable'.
-  //   (useCamera already emits face_detection_changed(unavailable) before camera_stopped,
-  //    but we handle camera_stopped directly as a safety net for old data.)
-  return buildTrack(events, totalMs, 'unavailable', (e, _current) => {
-    if (e.eventType === 'face_detection_changed') {
-      const s = e.data?.status
-      if (s === 'detected')     return 'detected'
-      if (s === 'not_detected') return 'not_detected'
-      if (s === 'unavailable')  return 'unavailable'
-    }
-    if (e.eventType === 'camera_stopped' || e.eventType === 'camera_error') {
-      return 'unavailable'
-    }
-    return null
-  })
-}
-
-// ── Track D: Action markers ───────────────────────────────────────────────
-
-function buildActionMarkers(events: SortedEvent[], totalMs: number): TimeMarker[] {
-  const markers: TimeMarker[] = []
-
-  // Cluster consecutive scroll events within 10 s windows.
-  const scrollClusters: { ms: number; count: number }[] = []
-
-  for (const event of events) {
-    const ms = Math.min(Math.max(event.elapsedMs, 0), totalMs)
-
-    switch (event.eventType) {
-      case 'check_in_shown':
-        markers.push({ ms, kind: 'check_in_shown', label: 'Check-in shown', detail: `${fmtMs(ms)}` })
-        break
-      case 'check_in_answered': {
-        const ans = String(event.data?.answer ?? '—')
-        markers.push({ ms, kind: 'check_in_answered', label: 'Check-in answered', detail: ans })
-        break
-      }
-      case 'check_in_skipped':
-        markers.push({ ms, kind: 'check_in_skipped', label: 'Check-in skipped', detail: `${fmtMs(ms)}` })
-        break
-      case 'scroll': {
-        const last = scrollClusters[scrollClusters.length - 1]
-        if (last && ms - last.ms < 10_000) {
-          last.count++
-        } else {
-          scrollClusters.push({ ms, count: 1 })
-        }
-        break
-      }
-    }
-  }
-
-  for (const sc of scrollClusters) {
-    markers.push({
-      ms: sc.ms,
-      kind: 'scroll',
-      label: 'Scroll',
-      detail: sc.count > 1 ? `×${sc.count}` : undefined,
-    })
-  }
-
-  return markers.sort((a, b) => a.ms - b.ms)
-}
-
-// ── Track E: Attention (eye-tracking mode) ────────────────────────────────
+// ── Track C: Attention (eye-tracking mode) ────────────────────────────────
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 

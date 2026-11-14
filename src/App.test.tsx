@@ -100,10 +100,10 @@ describe('Result page with timeline', () => {
     expect(screen.getByText('Settings are saved for event review. Behavioral rules are not yet applied to scoring.')).toBeDefined()
   })
 
-  it('result page shows "No task settings saved" for session without taskSettings', () => {
+  it('result page omits Task Settings section for session without taskSettings', () => {
     saveSession(makeCompletedSession())
     render(<App />)
-    expect(screen.getByText('No task settings saved for this session.')).toBeDefined()
+    expect(screen.queryByText('Task Settings')).toBeNull()
   })
 
   it('session with corrupt taskSettings still loads and shows timeline', () => {
@@ -116,8 +116,8 @@ describe('Result page with timeline', () => {
     render(<App />)
     // Timeline still renders (session core is intact)
     expect(screen.getByText('Timeline')).toBeDefined()
-    // Task settings treated as unavailable
-    expect(screen.getByText('No task settings saved for this session.')).toBeDefined()
+    // Task settings section hidden when settings are corrupt/unavailable
+    expect(screen.queryByText('Task Settings')).toBeNull()
   })
 
   it('idle page shows task setup section with working-on input', () => {

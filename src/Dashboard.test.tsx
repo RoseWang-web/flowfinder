@@ -155,17 +155,11 @@ describe('Dashboard time-grid', () => {
     expect(screen.getByText('+2')).toBeDefined()
   })
 
-  it('session detail panel has a Print button that calls window.print', async () => {
-    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
+  it('clicking a session block navigates to its session route', async () => {
     makeEntry()
     render(<Dashboard onStartNewSession={() => {}} />)
-    // Click the session block to open the detail panel
     const blocks = screen.getAllByRole('button', { name: /9:00/ })
     await act(async () => { await userEvent.click(blocks[0]) })
-    // Print button should appear in the detail panel
-    const printBtn = screen.getByRole('button', { name: /print session/i })
-    await act(async () => { await userEvent.click(printBtn) })
-    expect(printSpy).toHaveBeenCalledOnce()
-    printSpy.mockRestore()
+    expect(window.location.hash).toMatch(/^#session\//)
   })
 })

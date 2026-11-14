@@ -168,133 +168,6 @@ describe('buildTimeline — page visibility track', () => {
   })
 })
 
-// ── Track C: Face observation ─────────────────────────────────────────────
-
-describe('buildTimeline — face observation track', () => {
-  it('no camera → single no_camera segment', () => {
-    const s = session({ cameraEnabled: false, events: [] })
-    const { faceObservationTrack, hasCameraData } = buildTimeline(s)
-    expect(hasCameraData).toBe(false)
-    expect(faceObservationTrack).toHaveLength(1)
-    expect(faceObservationTrack[0]).toMatchObject({ kind: 'no_camera', startMs: 0 })
-  })
-
-  it('detected → not_detected → unavailable correct segmentation', () => {
-    const s = session({
-      cameraEnabled: true,
-      events: [
-        ev('session_start', 0),
-        ev('camera_started', 2_000),
-        ev('face_detection_changed', 3_000, { status: 'detected' }),
-        ev('face_detection_changed', 50_000, { status: 'not_detected' }),
-        ev('face_detection_changed', 55_000, { status: 'unavailable', reason: 'paused' }),
-        ev('camera_stopped', 55_100, { reason: 'paused' }),
-      ],
-    })
-    const { faceObservationTrack } = buildTimeline(s)
-    const kinds = faceObservationTrack.map(s => s.kind)
-    expect(kinds).toEqual(['unavailable', 'detected', 'not_detected', 'unavailable'])
-  })
-
-  it('pause or hidden does not extend prior detected segment', () => {
-    const s = session({
-      cameraEnabled: true,
-      events: [
-        ev('session_start', 0),
-        ev('camera_started', 1_000),
-        ev('face_detection_changed', 2_000, { status: 'detected' }),
-        // Pause: face status becomes unavailable, camera stopped
-        ev('face_detection_changed', 30_000, { status: 'unavailable', reason: 'paused' }),
-        ev('camera_stopped', 30_000, { reason: 'paused' }),
-        ev('session_pause', 30_000),
-      ],
-    })
-    const { faceObservationTrack } = buildTimeline(s)
-    const detectedSeg = faceObservationTrack.find(s => s.kind === 'detected')
-    expect(detectedSeg).toBeDefined()
-    // 'detected' segment must end at the pause point, not extend beyond it
-    expect(detectedSeg!.endMs).toBeLessThanOrEqual(30_000)
-    // After 30s, should be 'unavailable', not 'detected'
-    const lastSeg = faceObservationTrack[faceObservationTrack.length - 1]
-    expect(lastSeg.kind).toBe('unavailable')
-  })
-
-  it('camera_error closes detection → unavailable', () => {
-    const s = session({
-      cameraEnabled: true,
-      events: [
-        ev('camera_started', 0),
-        ev('face_detection_changed', 1_000, { status: 'detected' }),
-        ev('camera_error', 5_000, { kind: 'device_error' }),
-      ],
-    })
-    const { faceObservationTrack } = buildTimeline(s)
-    const afterError = faceObservationTrack.find(s => s.startMs >= 5_000)
-    expect(afterError?.kind).toBe('unavailable')
-  })
-
-  it('hasCameraData true when camera_started event present (even without cameraEnabled flag)', () => {
-    const s = session({ cameraEnabled: undefined, events: [ev('camera_started', 0)] })
-    expect(buildTimeline(s).hasCameraData).toBe(true)
-  })
-})
-
-// ── Track D: Action markers ───────────────────────────────────────────────
-
-describe('buildTimeline — action markers', () => {
-  it('check_in_shown and check_in_answered are distinct markers', () => {
-    const s = session({
-      events: [
-        ev('check_in_shown', 60_000),
-        ev('check_in_answered', 63_000, { answer: 'on_task' }),
-      ],
-    })
-    const { actionMarkers } = buildTimeline(s)
-    const kinds = actionMarkers.map(m => m.kind)
-    expect(kinds).toContain('check_in_shown')
-    expect(kinds).toContain('check_in_answered')
-    const shown   = actionMarkers.find(m => m.kind === 'check_in_shown')!
-    const answered = actionMarkers.find(m => m.kind === 'check_in_answered')!
-    expect(shown.ms).toBe(60_000)
-    expect(answered.ms).toBe(63_000)
-    expect(answered.detail).toBe('on_task')
-  })
-
-  it('check_in_skipped produces distinct marker', () => {
-    const s = session({ events: [ev('check_in_skipped', 61_000)] })
-    const { actionMarkers } = buildTimeline(s)
-    expect(actionMarkers.some(m => m.kind === 'check_in_skipped')).toBe(true)
-  })
-
-  it('scroll events within 10 s are clustered into one marker', () => {
-    const s = session({
-      events: [
-        ev('scroll', 10_000),
-        ev('scroll', 12_000),
-        ev('scroll', 15_000),
-        ev('scroll', 60_000),  // different cluster
-      ],
-    })
-    const { actionMarkers } = buildTimeline(s)
-    const scrolls = actionMarkers.filter(m => m.kind === 'scroll')
-    expect(scrolls).toHaveLength(2)
-    expect(scrolls[0].detail).toBe('×3')
-    expect(scrolls[1].detail).toBeUndefined()
-  })
-
-  it('markers are sorted by ms', () => {
-    const s = session({
-      events: [
-        ev('check_in_answered', 65_000),
-        ev('scroll', 10_000),
-        ev('check_in_shown', 60_000),
-      ],
-    })
-    const { actionMarkers } = buildTimeline(s)
-    const ms = actionMarkers.map(m => m.ms)
-    expect(ms).toEqual([...ms].sort((a, b) => a - b))
-  })
-})
 
 // ── Invariants ────────────────────────────────────────────────────────────
 
@@ -310,10 +183,8 @@ describe('buildTimeline — invariants', () => {
 
   it('all segments are within [0, totalMs]', () => {
     const s = session({
-      cameraEnabled: true,
       events: [
         ev('session_start', 0, { visible: true }),
-        ev('face_detection_changed', 10_000, { status: 'detected' }),
         ev('session_end', 120_000),
       ],
     })
@@ -321,7 +192,6 @@ describe('buildTimeline — invariants', () => {
     const allSegs = [
       ...tl.sessionStatusTrack,
       ...tl.pageVisibilityTrack,
-      ...tl.faceObservationTrack,
     ]
     for (const seg of allSegs) {
       expect(seg.startMs).toBeGreaterThanOrEqual(0)
@@ -355,22 +225,6 @@ describe('buildTimeline — invariants', () => {
   it('handles old session without cameraEnabled field', () => {
     const s = session({ cameraEnabled: undefined, events: [] })
     expect(() => buildTimeline(s)).not.toThrow()
-    expect(buildTimeline(s).hasCameraData).toBe(false)
-  })
-
-  it('markers are clipped to [0, totalMs]', () => {
-    const totalMs = 50_000
-    const s = session({
-      endedAt: BASE_SESSION.startedAt + totalMs,
-      events: [
-        ev('scroll', 60_000),  // beyond totalMs
-      ],
-    })
-    const { actionMarkers } = buildTimeline(s)
-    for (const m of actionMarkers) {
-      expect(m.ms).toBeGreaterThanOrEqual(0)
-      expect(m.ms).toBeLessThanOrEqual(totalMs)
-    }
   })
 })
 

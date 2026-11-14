@@ -825,6 +825,25 @@
   background: var(--red);
 }
 
+/* ── Full-screen session page (hash navigation) ───────────────────────────── */
+
+.session-page {
+  min-height: 100vh;
+  background: var(--cream);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 48px;
+}
+
+.session-page .detail-panel {
+  max-width: 680px;
+  width: 100%;
+  max-height: none;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08);
+}
+
 /* ── Detail overlay ───────────────────────────────────────────────────────── */
 
 .detail-overlay {
