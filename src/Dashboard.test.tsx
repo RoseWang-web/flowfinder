@@ -46,7 +46,7 @@ function makeEntry(overrides?: Partial<Session>) {
     },
     ...overrides,
   }
-  upsertHistoryEntry({ session, analysis: makePendingAnalysis(), entryVersion: 1 })
+  upsertHistoryEntry({ session, analysis: makePendingAnalysis(session.sessionId), entryVersion: 1 })
   return session
 }
 

@@ -18,7 +18,6 @@ import {
   scoreToColor,
   scoreToGrade,
   isValidScore,
-  computeWeightedAverage,
   computePeriodSummary,
   filterByCategory,
   groupEntriesByDay,
