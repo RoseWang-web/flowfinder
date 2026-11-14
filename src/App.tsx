@@ -581,6 +581,9 @@ export default function App() {
             <button className="btn btn-primary" onClick={() => { resetToIdle() }}>
               New Session
             </button>
+            <button className="btn btn-secondary btn-small" onClick={() => window.print()}>
+              Save as PDF
+            </button>
             <button className="btn btn-secondary btn-small" onClick={() => setAppView('dashboard')}>
               View History
             </button>

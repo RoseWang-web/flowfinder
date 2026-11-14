@@ -172,4 +172,14 @@ describe('Result page with timeline', () => {
     render(<App />)
     expect(screen.queryByText('Focus trend')).toBeNull()
   })
+
+  it('save as PDF button exists on result page and calls window.print()', async () => {
+    saveSession(makeCompletedSession())
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
+    render(<App />)
+    const pdfBtn = screen.getByRole('button', { name: 'Save as PDF' })
+    expect(pdfBtn).toBeDefined()
+    await act(async () => { await userEvent.click(pdfBtn) })
+    expect(printSpy).toHaveBeenCalledOnce()
+  })
 })
