@@ -34,6 +34,7 @@ import {
   parseYM,
   getEffectiveScore,
   validateScoreInput,
+  GRADE_LABELS,
   type CategoryFilter,
   NEUTRAL_COLOR,
 } from './dashboardStats'
@@ -107,10 +108,6 @@ function ScoreBadge({ score, size = 'sm' }: { score: number | null; size?: 'sm' 
 }
 
 // ── Session detail panel ──────────────────────────────────────────────────────
-
-const GRADE_LABELS: Record<'green' | 'yellow' | 'orange' | 'red', string> = {
-  green: 'Excellent', yellow: 'Good', orange: 'Fair', red: 'Low',
-}
 
 function SessionDetail({
   entry,
@@ -567,6 +564,8 @@ function WeekView({
 
 // ── Month view ────────────────────────────────────────────────────────────────
 
+const MAX_MONTH_DOTS = 4
+
 function MonthView({
   year,
   month,
@@ -595,31 +594,41 @@ function MonthView({
               return <div key={di} className="month-day-cell month-day-empty" />
             }
             const entries = byDay.get(date) ?? []
-            const avg = computeWeightedAverage(entries)
-            const color = isValidScore(avg) && entries.length > 0 ? scoreToColor(avg) : NEUTRAL_COLOR
+            // Sort sessions by start time
+            const sorted = [...entries].sort((a, b) => a.session.startedAt - b.session.startedAt)
             const hasData = entries.length > 0
             const isToday = date === today
             const dayNum = date.slice(8).replace(/^0/, '')
+            const shown = sorted.slice(0, MAX_MONTH_DOTS)
+            const overflow = sorted.length - MAX_MONTH_DOTS
 
             return (
               <button
                 key={date}
                 className={`month-day-cell ${isToday ? 'month-day-today' : ''} ${hasData ? 'month-day-has-data' : ''}`}
-                style={hasData ? { background: color.light, borderColor: color.bg } : {}}
                 onClick={() => onSelectDay(date)}
-                aria-label={`${date} ${hasData ? formatScore(avg) : 'No data'}`}
+                aria-label={`${date}: ${hasData ? `${entries.length} session${entries.length > 1 ? 's' : ''}` : 'No sessions'}`}
                 disabled={!hasData && date > today}
               >
                 <span className="month-day-num">{dayNum}</span>
                 {hasData && (
-                  <span
-                    className="month-day-dot"
-                    style={{ background: color.bg }}
-                    aria-hidden="true"
-                  />
-                )}
-                {hasData && isValidScore(avg) && (
-                  <span className="month-day-score">{Math.round(avg as number)}%</span>
+                  <span className="month-dots-row">
+                    {shown.map(entry => {
+                      const score = getEffectiveScore(entry)
+                      const color = isValidScore(score) ? scoreToColor(score) : null
+                      return (
+                        <i
+                          key={entry.session.sessionId}
+                          className={color ? 'month-dot' : 'month-dot month-dot-hollow'}
+                          style={color ? { background: color.bg } : undefined}
+                          aria-hidden="true"
+                        />
+                      )
+                    })}
+                    {overflow > 0 && (
+                      <span className="month-dot-overflow">+{overflow}</span>
+                    )}
+                  </span>
                 )}
               </button>
             )
@@ -653,11 +662,13 @@ function SummaryBar({ entries }: { entries: HistoryEntry[] }) {
       </div>
       <div className="summary-stat">
         {isValidScore(avg) ? (
-          <span
-            className="summary-stat-value summary-avg-score"
-            style={{ color: color.bg }}
-          >
-            {Math.round(avg as number)}%
+          <span className="summary-avg-row" style={{ color: color.bg }}>
+            <span className="summary-stat-value summary-avg-score">
+              {Math.round(avg as number)}%
+            </span>
+            <span className="summary-avg-label">
+              {GRADE_LABELS[scoreToGrade(avg as number)]}
+            </span>
           </span>
         ) : (
           <span className="summary-stat-value summary-avg-score summary-avg-none">—</span>

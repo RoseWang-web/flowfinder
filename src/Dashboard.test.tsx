@@ -104,6 +104,31 @@ describe('Dashboard time-grid', () => {
     printSpy.mockRestore()
   })
 
+  it('month view shows one dot per session on the same day', async () => {
+    // Two sessions on same day at different times
+    const today = new Date()
+    today.setHours(9, 0, 0, 0)
+    makeEntry({ sessionId: 'dot-a', startedAt: today.getTime() })
+    today.setHours(14, 0, 0, 0)
+    makeEntry({ sessionId: 'dot-b', startedAt: today.getTime() })
+    render(<Dashboard onStartNewSession={() => {}} />)
+    await act(async () => { await userEvent.click(screen.getByRole('button', { name: /month/i })) })
+    // Today's cell should show a label mentioning 2 sessions
+    const todayCell = screen.getByRole('button', { name: /2 sessions/ })
+    expect(todayCell).toBeDefined()
+  })
+
+  it('month view shows "+N" when a day has more than 4 sessions', async () => {
+    const today = new Date()
+    for (let h = 8; h <= 13; h++) {
+      today.setHours(h, 0, 0, 0)
+      makeEntry({ sessionId: `overflow-${h}`, startedAt: today.getTime() })
+    }
+    render(<Dashboard onStartNewSession={() => {}} />)
+    await act(async () => { await userEvent.click(screen.getByRole('button', { name: /month/i })) })
+    expect(screen.getByText('+2')).toBeDefined()
+  })
+
   it('session detail panel has a Print button that calls window.print', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
     makeEntry()

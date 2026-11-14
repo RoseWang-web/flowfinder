@@ -20,6 +20,7 @@ import {
   msToHHMM,
   formatScore,
   GRADE_COLORS,
+  GRADE_LABELS,
   NEUTRAL_COLOR,
 } from './dashboardStats'
 import type { HistoryEntry } from './historyStorage'
@@ -71,18 +72,30 @@ function makeEntry(sessionOverrides: Partial<Session> = {}, analysisOverrides: P
   return { session, analysis, entryVersion: 1 }
 }
 
-// ── scoreToGrade ──────────────────────────────────────────────────────────────
+// ── scoreToGrade — three-band system: 70+ green, 40–69 yellow, <40 red ───────
 
 describe('scoreToGrade', () => {
+  it('returns green for 70 (lower boundary)', () => expect(scoreToGrade(70)).toBe('green'))
   it('returns green for 80', () => expect(scoreToGrade(80)).toBe('green'))
   it('returns green for 100', () => expect(scoreToGrade(100)).toBe('green'))
+  it('returns yellow for 40 (lower boundary)', () => expect(scoreToGrade(40)).toBe('yellow'))
   it('returns yellow for 60', () => expect(scoreToGrade(60)).toBe('yellow'))
-  it('returns yellow for 79.9', () => expect(scoreToGrade(79.9)).toBe('yellow'))
-  it('returns orange for 40', () => expect(scoreToGrade(40)).toBe('orange'))
-  it('returns orange for 59.9', () => expect(scoreToGrade(59.9)).toBe('orange'))
+  it('returns yellow for 69 (upper boundary)', () => expect(scoreToGrade(69)).toBe('yellow'))
   it('returns red for 0', () => expect(scoreToGrade(0)).toBe('red'))
+  it('returns red for 39', () => expect(scoreToGrade(39)).toBe('red'))
   it('returns red for 39.9', () => expect(scoreToGrade(39.9)).toBe('red'))
-  it('grade boundaries are exclusive — 79 is yellow not green', () => expect(scoreToGrade(79)).toBe('yellow'))
+  it('boundary: 69.9 is yellow, 70 is green', () => {
+    expect(scoreToGrade(69.9)).toBe('yellow')
+    expect(scoreToGrade(70)).toBe('green')
+  })
+})
+
+// ── GRADE_LABELS ──────────────────────────────────────────────────────────────
+
+describe('GRADE_LABELS', () => {
+  it('green maps to "On task"', () => expect(GRADE_LABELS.green).toBe('On task'))
+  it('yellow maps to "Mixed"', () => expect(GRADE_LABELS.yellow).toBe('Mixed'))
+  it('red maps to "Mostly elsewhere"', () => expect(GRADE_LABELS.red).toBe('Mostly elsewhere'))
 })
 
 // ── scoreToColor ──────────────────────────────────────────────────────────────
@@ -90,6 +103,9 @@ describe('scoreToGrade', () => {
 describe('scoreToColor', () => {
   it('returns GRADE_COLORS.green for score 85', () => {
     expect(scoreToColor(85)).toEqual(GRADE_COLORS.green)
+  })
+  it('returns GRADE_COLORS.yellow for score 55', () => {
+    expect(scoreToColor(55)).toEqual(GRADE_COLORS.yellow)
   })
   it('returns GRADE_COLORS.red for score 0 (valid, not null)', () => {
     expect(scoreToColor(0)).toEqual(GRADE_COLORS.red)
@@ -103,6 +119,9 @@ describe('scoreToColor', () => {
   it('returns NEUTRAL_COLOR for Infinity', () => {
     expect(scoreToColor(Infinity)).toEqual(NEUTRAL_COLOR)
   })
+  it('green uses hex #4F8A5B', () => expect(GRADE_COLORS.green.bg).toBe('#4F8A5B'))
+  it('yellow uses hex #E0A43A', () => expect(GRADE_COLORS.yellow.bg).toBe('#E0A43A'))
+  it('red uses hex #C8553D', () => expect(GRADE_COLORS.red.bg).toBe('#C8553D'))
 })
 
 // ── isValidScore ──────────────────────────────────────────────────────────────

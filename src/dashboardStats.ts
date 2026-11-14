@@ -9,24 +9,30 @@
 import type { HistoryEntry } from './historyStorage'
 
 // ── Score colour mapping ──────────────────────────────────────────────────────
-// Spec §8: 80–100 green, 60–<80 yellow, 40–<60 orange, 0–<40 red
-// Grade is determined by the raw (un-rounded) value.
+// Three bands (thresholds tentative — adjust after model validation):
+//   70–100 → green  (On task)
+//   40–69  → yellow (Mixed)
+//    0–39  → red    (Mostly elsewhere)
 
-export type ScoreGrade = 'green' | 'yellow' | 'orange' | 'red'
+export type ScoreGrade = 'green' | 'yellow' | 'red'
 
 /** Returns grade for a numeric score. Caller must ensure score is a valid number 0–100. */
 export function scoreToGrade(score: number): ScoreGrade {
-  if (score >= 80) return 'green'
-  if (score >= 60) return 'yellow'
-  if (score >= 40) return 'orange'
+  if (score >= 70) return 'green'
+  if (score >= 40) return 'yellow'
   return 'red'
 }
 
 export const GRADE_COLORS: Record<ScoreGrade, { bg: string; text: string; light: string }> = {
-  green:  { bg: '#16a34a', text: '#ffffff', light: '#dcfce7' },
-  yellow: { bg: '#d97706', text: '#ffffff', light: '#fef9c3' },
-  orange: { bg: '#ea580c', text: '#ffffff', light: '#ffedd5' },
-  red:    { bg: '#dc2626', text: '#ffffff', light: '#fee2e2' },
+  green:  { bg: '#4F8A5B', text: '#ffffff', light: '#E8F4EB' },
+  yellow: { bg: '#E0A43A', text: '#ffffff', light: '#FEF3DC' },
+  red:    { bg: '#C8553D', text: '#ffffff', light: '#FAEAE7' },
+}
+
+export const GRADE_LABELS: Record<ScoreGrade, string> = {
+  green:  'On task',
+  yellow: 'Mixed',
+  red:    'Mostly elsewhere',
 }
 
 export const NEUTRAL_COLOR = { bg: '#6b7280', text: '#ffffff', light: '#f3f4f6' }
