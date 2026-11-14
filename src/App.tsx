@@ -6,10 +6,22 @@ import {
   READING_DURATION_MS,
 } from './useSession'
 import { useCamera } from './useCamera'
+import { useGaze } from './useGaze'
+import { GazeCalibration } from './GazeCalibration'
+import modelJson from './model.json'
 import { TimelineChart } from './TimelineChart'
 import { buildTimeline } from './timeline'
 import { LANDMARK_CONNECTIONS } from './camera'
-import { CheckInAnswer, SessionEvent, type CategoryId, type TaskRules, type SessionTaskSettings } from './types'
+import {
+  CheckInAnswer,
+  SessionEvent,
+  type Session,
+  type CategoryId,
+  type TaskRules,
+  type SessionTaskSettings,
+  type CalibrationSummary,
+  type GazeQuality,
+} from './types'
 import {
   CATEGORIES,
   loadRulesOrDefault,
@@ -53,8 +65,16 @@ function eventLabel(type: SessionEvent['eventType']): string {
     camera_stopped: '攝影機已停止',
     camera_error: '攝影機錯誤',
     face_detection_changed: '面部偵測變更',
+    attention_score: '專注度估計',
+    gaze_error: '眼動追蹤錯誤',
   }
   return map[type] ?? type
+}
+
+const GAZE_QUALITY_LABEL: Record<GazeQuality, string> = {
+  good: '良好',
+  usable: '可用',
+  poor: '不足',
 }
 
 function checkInAnswerLabel(answer: CheckInAnswer | null): string {
@@ -66,6 +86,17 @@ function checkInAnswerLabel(answer: CheckInAnswer | null): string {
     not_sure: '不確定',
   }
   return map[answer]
+}
+
+/** Save the session (events, calibration, scores; no images) as a JSON file */
+function downloadSession(session: Session) {
+  const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `flowfinder-session-${new Date(session.startedAt).toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────
@@ -156,8 +187,18 @@ export default function App() {
     onSessionEvent: recordEvent,
   })
 
+  // Reading column, used to scale the line-return threshold
+  const columnRef = useRef<HTMLElement | null>(null)
+
+  const gaze = useGaze({
+    sessionStatus: status,
+    onSessionEvent: recordEvent,
+    getColumnWidth: () => columnRef.current?.clientWidth ?? 0,
+  })
+
   // ── Dev panel state ──────────────────────────────────────────────────
   const [devPanelOpen, setDevPanelOpen] = useState(false)
+  const [gazeDotVisible, setGazeDotVisible] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   // ── Task draft state ─────────────────────────────────────────────────
@@ -280,6 +321,60 @@ export default function App() {
     </div>
   ) : null
 
+  // ── Eye-tracking indicator (reading page) ────────────────────────────
+  const gazeLive = gaze.gazeStatus === 'active' || gaze.gazeStatus === 'paused' || gaze.gazeStatus === 'ready'
+  const latest = gaze.latest
+  const gazeIndicator = gazeLive ? (
+    <div className="gaze-indicator" aria-live="polite">
+      {gaze.gazeStatus === 'paused' ? '眼動追蹤已暫停'
+        : !latest ? '眼動追蹤中…'
+        : latest.status === 'warming_up' ? `暖機中 ${latest.windowsSeen}/${latest.windowsNeeded}`
+        : latest.status === 'low_quality' ? '視線訊號不足'
+        : '眼動追蹤中'}
+    </div>
+  ) : null
+
+  const gazeDevRows = (
+    <>
+      <div className="dev-row">
+        <span className="dev-label">眼動狀態</span>
+        <span className="dev-value">{gaze.gazeStatus}{gaze.usedSavedBaseline ? '（沿用基準）' : ''}</span>
+      </div>
+      <div className="dev-row">
+        <span className="dev-label">估計狀態</span>
+        <span className="dev-value">{latest?.status ?? '—'}</span>
+      </div>
+      <div className="dev-row dev-row-mono">
+        <span className="dev-label">換行 / 速度</span>
+        <span className="dev-value">
+          {latest ? `${latest.features.nLineReturns} / ${Math.round(latest.features.xProgress)} px/s` : '—'}
+        </span>
+      </div>
+      <div className="dev-row dev-row-mono">
+        <span className="dev-label">遺失比例</span>
+        <span className="dev-value">{latest ? `${Math.round(latest.features.missingRatio * 100)}%` : '—'}</span>
+      </div>
+      <div className="dev-row dev-row-mono">
+        <span className="dev-label">分數 / 趨勢</span>
+        <span className="dev-value">
+          {latest?.status === 'ok' ? `${latest.score.toFixed(3)} / ${latest.trend.toFixed(3)}` : '—'}
+        </span>
+      </div>
+      <label className="dev-row">
+        <span className="dev-label">顯示視線點</span>
+        <input
+          type="checkbox"
+          checked={gazeDotVisible}
+          onChange={e => {
+            setGazeDotVisible(e.target.checked)
+            gaze.setGazeDotVisible(e.target.checked)
+          }}
+        />
+      </label>
+      <div className="dev-divider" />
+    </>
+  )
+
   // ── Result page ──────────────────────────────────────────────────────
   if (status === 'completed' && session !== null) {
     const isInterrupted = session.endReason === 'interrupted'
@@ -296,8 +391,12 @@ export default function App() {
     const hasCameraData = session.cameraEnabled === true
 
     // Events to show (deduplicate scroll noise)
-    const shownEvents = session.events.filter(e => e.eventType !== 'scroll')
+    const shownEvents = session.events.filter(
+      e => e.eventType !== 'scroll' && e.eventType !== 'attention_score',
+    )
     const scrollEvents = session.events.filter(e => e.eventType === 'scroll')
+    const attentionEvents = session.events.filter(e => e.eventType === 'attention_score')
+    const attentionScored = attentionEvents.filter(e => e.data?.status === 'ok').length
     const scrollSummary =
       scrollEvents.length > 0
         ? [{
@@ -393,6 +492,67 @@ export default function App() {
             )}
           </div>
 
+          {/* Eye-tracking section */}
+          {session.gazeEnabled && (
+            <div className="result-section">
+              <h3 className="result-section-title">眼動追蹤</h3>
+              <div className="result-stats">
+                {session.gaze && (
+                  <>
+                    <div className="stat-row">
+                      <span className="stat-label">校準品質</span>
+                      <span className="stat-value">{GAZE_QUALITY_LABEL[session.gaze.calibration.quality]}</span>
+                    </div>
+                    <div className="stat-row">
+                      <span className="stat-label">平均偏差／抖動</span>
+                      <span className="stat-value">
+                        {session.gaze.calibration.accuracyPx === null ? '—' : Math.round(session.gaze.calibration.accuracyPx)}
+                        {' / '}
+                        {session.gaze.calibration.precisionPx === null ? '—' : Math.round(session.gaze.calibration.precisionPx)} px
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="stat-row">
+                  <span className="stat-label">專注度估計</span>
+                  <span className="stat-value">共 {attentionEvents.length} 筆，有效 {attentionScored} 筆</span>
+                </div>
+              </div>
+              {timelineData.checkInAttention && (() => {
+                const c = timelineData.checkInAttention
+                const focus = (v: number | null) => (v === null ? '—' : (1 - v).toFixed(2))
+                return (
+                  <>
+                    <h4 className="result-subtitle">回報前後對照</h4>
+                    <div className="result-stats">
+                      <div className="stat-row">
+                        <span className="stat-label">你的回答</span>
+                        <span className="stat-value">{checkInAnswerLabel(c.answer as CheckInAnswer | null)}</span>
+                      </div>
+                      <div className="stat-row">
+                        <span className="stat-label">
+                          回報前 30 秒的專注度
+                          <span className="stat-label-note">（{c.nBefore} 個窗口）</span>
+                        </span>
+                        <span className="stat-value">{focus(c.scoreBefore)}</span>
+                      </div>
+                      <div className="stat-row">
+                        <span className="stat-label">整段平均專注度</span>
+                        <span className="stat-value">{focus(c.sessionMean)}</span>
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
+              <p className="result-note">
+                專注度為相對指標（1 − 分心分數），只適合和自己比較；單次回報無法驗證準確度，累積多次紀錄才能評估。
+              </p>
+              <button className="btn btn-ghost btn-small" onClick={() => downloadSession(session)}>
+                下載本次資料（JSON）
+              </button>
+            </div>
+          )}
+
           {/* Task settings section */}
           <div className="result-section">
             <h3 className="result-section-title">本次任務設定</h3>
@@ -429,7 +589,7 @@ export default function App() {
           {/* Event log */}
           <div className="result-section">
             <h3 className="result-section-title">事件紀錄</h3>
-            {!hasCameraData && (
+            {!hasCameraData && !session.gazeEnabled && (
               <p className="result-note camera-no-data">此紀錄沒有攝影機資料。</p>
             )}
             <div className="event-list">
@@ -495,6 +655,19 @@ export default function App() {
       enableCamera()
       start({ cameraEnabled: true, taskSettings })
     }
+    const handleStartGaze = () => {
+      disableCamera()
+      void gaze.startTracker()
+    }
+    const handleGazeCalibrated = (summary: CalibrationSummary) => {
+      gaze.completeCalibration()
+      start({
+        cameraEnabled: false,
+        gazeEnabled: true,
+        gaze: { calibration: summary, modelCvRocAuc: modelJson.training.cvRocAuc },
+        taskSettings: buildSessionSettings(),
+      })
+    }
     const handleNoCameraStart = () => {
       const taskSettings = buildSessionSettings()
       disableCamera()
@@ -504,6 +677,20 @@ export default function App() {
     return (
       <div className="page reading-page">
         {errorBanner}
+        {gaze.gazeStatus === 'starting' && (
+          <div className="gaze-overlay" role="status">
+            <div className="gaze-card">
+              <p className="gaze-text">正在開啟攝影機並載入眼動模型…（第一次可能需要數十秒）</p>
+            </div>
+          </div>
+        )}
+        {gaze.gazeStatus === 'calibrating' && (
+          <GazeCalibration
+            tracker={gaze.tracker}
+            onComplete={handleGazeCalibrated}
+            onCancel={gaze.cancel}
+          />
+        )}
         <header className="reading-header">
           <div className="header-top">
             <div className="project-info">
@@ -618,6 +805,28 @@ export default function App() {
               </div>
             </div>
 
+            {/* Eye-tracking (experimental) */}
+            <div className="camera-consent gaze-consent">
+              <p className="camera-consent-title">眼動追蹤（實驗性）</p>
+              <p className="camera-consent-desc">
+                用攝影機估計視線位置，根據換行頻率與閱讀速度估計專注度。開始前需要約 1 分鐘校準。
+                影像只在瀏覽器中處理，不保存影像；僅保存估計數值。
+                {selectedCategory !== 'web_reading' && ' 此模式為網頁閱讀設計，其他任務分類的估計可能不準。'}
+              </p>
+              <div className="camera-consent-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={handleStartGaze}
+                  disabled={gaze.gazeStatus === 'starting' || gaze.gazeStatus === 'calibrating'}
+                >
+                  啟用眼動追蹤
+                </button>
+              </div>
+              {gaze.gazeError && (
+                <p className="camera-error-msg">⚠️ {gaze.gazeError.message}</p>
+              )}
+            </div>
+
             <div className="article-body">
               {article.paragraphs.map((para, i) => (
                 <p key={i} className="article-para">{para}</p>
@@ -656,6 +865,7 @@ export default function App() {
             </div>
             {/* Camera indicator in header */}
             {cameraIndicator}
+            {gazeIndicator}
             <div className="controls">
               {status === 'running' && (
                 <>
@@ -686,7 +896,7 @@ export default function App() {
       </header>
 
       <main className="article-container" ref={articleRef}>
-        <article className="article">
+        <article className="article" ref={columnRef}>
           <h2 className="article-title">{article.title}</h2>
           <p className="article-subtitle">{article.subtitle}</p>
           <div className="article-body">
@@ -696,8 +906,8 @@ export default function App() {
           </div>
         </article>
 
-        {/* ── Dev panel (only when camera is active) ── */}
-        {cameraStatus !== 'idle' && cameraStatus !== 'error' && (
+        {/* ── Dev panel (only when camera or eye-tracking is active) ── */}
+        {((cameraStatus !== 'idle' && cameraStatus !== 'error') || gazeLive) && (
           <section className="dev-panel" aria-label="開發觀察">
             <button
               className="dev-panel-toggle"
@@ -716,6 +926,7 @@ export default function App() {
                       : '未啟用'}
                   </span>
                 </div>
+                {gazeLive && gazeDevRows}
                 {landmarkerFallbackMsg && (
                   <p className="dev-fallback-note">{landmarkerFallbackMsg}</p>
                 )}

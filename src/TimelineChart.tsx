@@ -1,5 +1,5 @@
 import { useState, useId } from 'react'
-import type { TimelineData, TimeSegment, TimeMarker } from './timeline'
+import type { TimelineData, TimeSegment, TimeMarker, AttentionPoint } from './timeline'
 import { fmtMs } from './timeline'
 
 // ── Layout constants ──────────────────────────────────────────────────────
@@ -15,7 +15,33 @@ const GAP     = 10        // vertical gap between tracks
 const TICK_STEP_S = 30    // axis ticks every 30 s
 
 function trackY(i: number) { return Y0 + AXIS_H + 6 + i * (TRACK_H + GAP) }
-const SVG_H = trackY(3) + TRACK_H + 10
+const BASE_SVG_H = trackY(3) + TRACK_H + 10
+
+// Attention band (eye-tracking mode only), drawn below the 4 tracks
+const ATT_Y = trackY(4)
+const ATT_H = 72
+const GAZE_SVG_H = ATT_Y + ATT_H + 10
+/**
+ * The score is a ranking, so we plot "focus" = 1 − score on a fixed range
+ * around the model's typical output instead of 0–1 (which would look flat).
+ */
+const FOCUS_MIN = 0.25
+const FOCUS_MAX = 0.75
+/** Break the line when consecutive scores are further apart than this (pause, check-in) */
+const MAX_LINE_GAP_MS = 5_000
+
+const ATT_COLOUR = {
+  trend: '#2563eb',
+  window: '#93c5fd',
+  warming_up: '#d1d5db',
+  low_quality: '#fca5a5',
+}
+
+const ATT_STATUS_LABEL: Record<AttentionPoint['status'], string> = {
+  ok: '有效估計',
+  warming_up: '暖機中',
+  low_quality: '視線訊號不足',
+}
 
 // ── Colour maps ───────────────────────────────────────────────────────────
 
@@ -73,6 +99,7 @@ const MARKER_LABEL: Record<string, string> = {
 type Selection =
   | { kind: 'segment'; track: string; seg: TimeSegment }
   | { kind: 'marker'; marker: TimeMarker }
+  | { kind: 'attention'; point: AttentionPoint }
 
 // ── Legend ────────────────────────────────────────────────────────────────
 
@@ -89,6 +116,13 @@ const LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' 
   { label: '回答回報',     colour: '#3b82f6', shape: 'diamond' },
   { label: '略過回報',     colour: '#9ca3af', shape: 'diamond' },
   { label: '捲動',         colour: '#cbd5e1', shape: 'line' },
+]
+
+const GAZE_LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' | 'dot' }> = [
+  { label: '專注度趨勢',   colour: ATT_COLOUR.trend, shape: 'line' },
+  { label: '單一窗口',     colour: ATT_COLOUR.window, shape: 'dot' },
+  { label: '暖機中',       colour: ATT_COLOUR.warming_up },
+  { label: '視線訊號不足', colour: ATT_COLOUR.low_quality },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -121,6 +155,30 @@ export function TimelineChart({ data }: Props) {
         : { kind: 'segment', track, seg },
     )
 
+  const selectAttention = (point: AttentionPoint) =>
+    setSelection(prev =>
+      prev?.kind === 'attention' && prev.point === point ? null : { kind: 'attention', point },
+    )
+
+  // ── Attention band geometry ────────────────────────────────────────────
+  const hasGaze = data.hasGazeData
+  const svgH = hasGaze ? GAZE_SVG_H : BASE_SVG_H
+  const focusY = (score: number) => {
+    const f = Math.min(Math.max(1 - score, FOCUS_MIN), FOCUS_MAX)
+    return ATT_Y + ATT_H - ((f - FOCUS_MIN) / (FOCUS_MAX - FOCUS_MIN)) * ATT_H
+  }
+  // Split the trend into runs of consecutive valid scores
+  const trendRuns: AttentionPoint[][] = []
+  let prevOk: AttentionPoint | null = null
+  for (const p of data.attentionTrack) {
+    if (p.status !== 'ok' || p.trend === null) { prevOk = null; continue }
+    if (!prevOk || p.ms - prevOk.ms > MAX_LINE_GAP_MS) trendRuns.push([])
+    trendRuns[trendRuns.length - 1].push(p)
+    prevOk = p
+  }
+  const checkInShownMs = data.actionMarkers.find(m => m.kind === 'check_in_shown')?.ms ?? null
+  const legend = hasGaze ? [...LEGEND, ...GAZE_LEGEND] : LEGEND
+
   const selectMarker = (marker: TimeMarker) =>
     setSelection(prev =>
       prev?.kind === 'marker' && prev.marker === marker ? null : { kind: 'marker', marker },
@@ -140,7 +198,7 @@ export function TimelineChart({ data }: Props) {
       <div className="timeline-scroll">
         <svg
           width={SVG_W}
-          height={SVG_H}
+          height={svgH}
           role="img"
           aria-label="閱讀 session 時間軸"
           style={{ display: 'block', userSelect: 'none' }}
@@ -264,6 +322,73 @@ export function TimelineChart({ data }: Props) {
               </g>
             )
           })}
+
+          {/* ── Attention band (eye-tracking mode) ── */}
+          {hasGaze && (
+            <g aria-label="專注度">
+              <text x={LABEL_W - 6} y={ATT_Y + ATT_H / 2 + 4} textAnchor="end" fontSize={11} fill="#6b7280" fontWeight="600">
+                專注度
+              </text>
+              <text x={LABEL_W - 6} y={ATT_Y + 10} textAnchor="end" fontSize={9} fill="#9ca3af">高</text>
+              <text x={LABEL_W - 6} y={ATT_Y + ATT_H - 2} textAnchor="end" fontSize={9} fill="#9ca3af">低</text>
+              <rect x={LABEL_W} y={ATT_Y} width={TL_W} height={ATT_H} fill="#f9fafb" rx={3} />
+              {ticks.map(ms => (
+                <line key={ms} x1={tx(ms)} y1={ATT_Y} x2={tx(ms)} y2={ATT_Y + ATT_H} stroke="#e5e7eb" strokeWidth={1} />
+              ))}
+              {/* Middle reference line */}
+              <line
+                x1={LABEL_W} y1={focusY(0.5)} x2={LABEL_W + TL_W} y2={focusY(0.5)}
+                stroke="#e5e7eb" strokeWidth={1} strokeDasharray="4 3"
+              />
+              {/* Check-in prompt, to compare with what the model saw just before */}
+              {checkInShownMs !== null && (
+                <line
+                  x1={tx(checkInShownMs)} y1={ATT_Y} x2={tx(checkInShownMs)} y2={ATT_Y + ATT_H}
+                  stroke={MARKER_COLOUR.check_in_shown} strokeWidth={1.5} strokeDasharray="3 3"
+                />
+              )}
+              {/* Windows without a score: small bars at the bottom */}
+              {data.attentionTrack.filter(p => p.status !== 'ok').map((p, i) => (
+                <rect
+                  key={`na-${i}`}
+                  x={tx(p.ms) - 2} y={ATT_Y + ATT_H - 5} width={4} height={4}
+                  fill={ATT_COLOUR[p.status as 'warming_up' | 'low_quality']}
+                  style={{ cursor: 'pointer' }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`專注度：${ATT_STATUS_LABEL[p.status]}，${fmtMs(p.ms)}`}
+                  onClick={() => selectAttention(p)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAttention(p) } }}
+                />
+              ))}
+              {/* Trend line */}
+              {trendRuns.map((run, ri) => (
+                <polyline
+                  key={`run-${ri}`}
+                  points={run.map(p => `${tx(p.ms)},${focusY(p.trend as number)}`).join(' ')}
+                  fill="none" stroke={ATT_COLOUR.trend} strokeWidth={2} strokeLinejoin="round"
+                />
+              ))}
+              {/* Single-window scores (noisy) */}
+              {data.attentionTrack.filter(p => p.status === 'ok' && p.score !== null).map((p, i) => {
+                const isSelected = selection?.kind === 'attention' && selection.point === p
+                return (
+                  <circle
+                    key={`pt-${i}`}
+                    cx={tx(p.ms)} cy={focusY(p.score as number)} r={isSelected ? 4 : 2.5}
+                    fill={isSelected ? '#1d4ed8' : ATT_COLOUR.window}
+                    style={{ cursor: 'pointer', outline: 'none' }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`專注度，${fmtMs(p.ms)}，分數 ${(p.score as number).toFixed(3)}`}
+                    aria-pressed={isSelected}
+                    onClick={() => selectAttention(p)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAttention(p) } }}
+                  />
+                )
+              })}
+            </g>
+          )}
         </svg>
       </div>
 
@@ -292,6 +417,23 @@ export function TimelineChart({ data }: Props) {
               </>
             )
           })()}
+          {selection.kind === 'attention' && (() => {
+            const p = selection.point
+            return (
+              <>
+                <span className="tl-detail-track">專注度</span>
+                <span className="tl-detail-time">{fmtMs(Math.max(p.ms - 10_000, 0))} → {fmtMs(p.ms)}</span>
+                <span className="tl-detail-kind">
+                  {p.status === 'ok' && p.score !== null && p.trend !== null
+                    ? `分數 ${p.score.toFixed(3)}（趨勢 ${p.trend.toFixed(3)}）`
+                    : ATT_STATUS_LABEL[p.status]}
+                </span>
+                {p.nLineReturns !== null && p.xProgress !== null && (
+                  <span className="tl-detail-dur">換行 {p.nLineReturns} 次・往右 {Math.round(p.xProgress)} px/s</span>
+                )}
+              </>
+            )
+          })()}
           <button
             className="tl-detail-close"
             onClick={() => setSelection(null)}
@@ -302,9 +444,11 @@ export function TimelineChart({ data }: Props) {
 
       {/* ── Legend ── */}
       <div className="timeline-legend" aria-label="圖例">
-        {LEGEND.map(item => (
+        {legend.map(item => (
           <span key={item.label} className="tl-legend-item">
-            {item.shape === 'line' ? (
+            {item.shape === 'dot' ? (
+              <span className="tl-legend-swatch" style={{ background: item.colour, borderRadius: '50%' }} />
+            ) : item.shape === 'line' ? (
               <span className="tl-legend-line" style={{ background: item.colour }} />
             ) : item.shape === 'diamond' ? (
               <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ flexShrink: 0 }}>

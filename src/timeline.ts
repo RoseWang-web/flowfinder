@@ -33,6 +33,35 @@ export interface TimeMarker {
   detail?: string
 }
 
+export type AttentionStatus = 'ok' | 'warming_up' | 'low_quality'
+
+/** One attention_score event (eye-tracking mode), one per model step */
+export interface AttentionPoint {
+  /** elapsedMs at the END of the 10 s window it describes */
+  ms: number
+  status: AttentionStatus
+  /** Mind-wandering score of this window (higher = more likely mind wandering); null unless ok */
+  score: number | null
+  /** Mean score of recent windows; null unless ok */
+  trend: number | null
+  nLineReturns: number | null
+  xProgress: number | null
+  missingRatio: number | null
+}
+
+/** How the model scored the time right before the check-in, next to what the user answered */
+export interface CheckInAttention {
+  shownMs: number
+  answer: string | null
+  /** Mean window score in the CHECK_IN_LOOKBACK_MS before the prompt */
+  scoreBefore: number | null
+  nBefore: number
+  /** Mean window score over the whole session */
+  sessionMean: number | null
+}
+
+export const CHECK_IN_LOOKBACK_MS = 30_000
+
 export interface TimelineData {
   /** Total timeline duration (elapsedMs); always ≥ 1 */
   totalMs: number
@@ -42,6 +71,9 @@ export interface TimelineData {
   pageVisibilityTrack: TimeSegment[]
   faceObservationTrack: TimeSegment[]
   actionMarkers: TimeMarker[]
+  hasGazeData: boolean
+  attentionTrack: AttentionPoint[]
+  checkInAttention: CheckInAttention | null
 }
 
 // ── Main entry point ──────────────────────────────────────────────────────
@@ -64,6 +96,8 @@ export function buildTimeline(session: Session): TimelineData {
     session.cameraEnabled === true ||
     events.some(e => e.eventType === 'camera_started')
 
+  const attentionTrack = buildAttentionTrack(events, totalMs)
+
   return {
     totalMs,
     activeReadingMs: session.activeReadingMs,
@@ -74,6 +108,9 @@ export function buildTimeline(session: Session): TimelineData {
       ? buildFaceObservationTrack(events, totalMs)
       : [{ startMs: 0, endMs: totalMs, kind: 'no_camera' }],
     actionMarkers: buildActionMarkers(events, totalMs),
+    hasGazeData: session.gazeEnabled === true || attentionTrack.length > 0,
+    attentionTrack,
+    checkInAttention: buildCheckInAttention(events, attentionTrack),
   }
 }
 
@@ -216,6 +253,50 @@ function buildActionMarkers(events: SortedEvent[], totalMs: number): TimeMarker[
   }
 
   return markers.sort((a, b) => a.ms - b.ms)
+}
+
+// ── Track E: Attention (eye-tracking mode) ────────────────────────────────
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+function buildAttentionTrack(events: SortedEvent[], totalMs: number): AttentionPoint[] {
+  const points: AttentionPoint[] = []
+  for (const e of events) {
+    if (e.eventType !== 'attention_score') continue
+    const st = e.data?.status
+    if (st !== 'ok' && st !== 'warming_up' && st !== 'low_quality') continue
+    const ok = st === 'ok'
+    points.push({
+      ms: Math.min(Math.max(e.elapsedMs, 0), totalMs),
+      status: st,
+      score: ok ? num(e.data?.score) : null,
+      trend: ok ? num(e.data?.trend) : null,
+      nLineReturns: num(e.data?.nLineReturns),
+      xProgress: num(e.data?.xProgress),
+      missingRatio: num(e.data?.missingRatio),
+    })
+  }
+  return points
+}
+
+function mean(values: number[]): number | null {
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
+}
+
+function buildCheckInAttention(events: SortedEvent[], track: AttentionPoint[]): CheckInAttention | null {
+  if (track.length === 0) return null
+  const shown = events.find(e => e.eventType === 'check_in_shown')
+  if (!shown) return null
+  const answered = events.find(e => e.eventType === 'check_in_answered')
+  const scores = track.filter(p => p.score !== null)
+  const before = scores.filter(p => p.ms <= shown.elapsedMs && p.ms > shown.elapsedMs - CHECK_IN_LOOKBACK_MS)
+  return {
+    shownMs: shown.elapsedMs,
+    answer: answered ? String(answered.data?.answer ?? '') || null : null,
+    scoreBefore: mean(before.map(p => p.score as number)),
+    nBefore: before.length,
+    sessionMean: mean(scores.map(p => p.score as number)),
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────

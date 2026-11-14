@@ -373,3 +373,69 @@ describe('buildTimeline — invariants', () => {
     }
   })
 })
+
+// ── Attention track (eye-tracking mode) ───────────────────────────────────
+
+describe('buildTimeline — attention track', () => {
+  const att = (ms: number, data: Record<string, unknown>) => ev('attention_score', ms, data)
+
+  it('is empty and hasGazeData false for sessions without eye-tracking', () => {
+    const t = buildTimeline(session({ events: [ev('session_start', 0, { visible: true })] }))
+    expect(t.hasGazeData).toBe(false)
+    expect(t.attentionTrack).toEqual([])
+    expect(t.checkInAttention).toBeNull()
+  })
+
+  it('turns attention_score events into points, keeping scores only for ok windows', () => {
+    const t = buildTimeline(session({
+      gazeEnabled: true,
+      events: [
+        ev('session_start', 0, { visible: true }),
+        att(10_000, { status: 'warming_up', nLineReturns: 2, xProgress: 120, missingRatio: 0.01 }),
+        att(12_000, { status: 'low_quality', nLineReturns: 0, xProgress: 5, missingRatio: 0.8 }),
+        att(14_000, { status: 'ok', score: 0.42, trend: 0.45, nLineReturns: 3, xProgress: 130, missingRatio: 0 }),
+      ],
+    }))
+    expect(t.hasGazeData).toBe(true)
+    expect(t.attentionTrack.map(p => p.status)).toEqual(['warming_up', 'low_quality', 'ok'])
+    expect(t.attentionTrack[0].score).toBeNull()
+    expect(t.attentionTrack[2]).toMatchObject({ ms: 14_000, score: 0.42, trend: 0.45, nLineReturns: 3 })
+  })
+
+  it('skips malformed events', () => {
+    const t = buildTimeline(session({
+      events: [att(5_000, { status: 'weird' }), att(6_000, { status: 'ok', score: 'x' })],
+    }))
+    expect(t.attentionTrack).toHaveLength(1)
+    expect(t.attentionTrack[0].score).toBeNull()
+  })
+
+  it('compares the 30 s before the check-in with the whole session', () => {
+    const events = [ev('session_start', 0, { visible: true })]
+    // Scores 0.3 before 30 s, 0.7 in the 30 s right before the prompt at 60 s, 0.3 after
+    for (let ms = 20_000; ms <= 110_000; ms += 2_000) {
+      const score = ms > 30_000 && ms <= 60_000 ? 0.7 : 0.3
+      events.push(att(ms, { status: 'ok', score, trend: score }))
+    }
+    events.push(ev('check_in_shown', 60_000))
+    events.push(ev('check_in_answered', 65_000, { answer: 'off_task' }))
+    const t = buildTimeline(session({ gazeEnabled: true, events }))
+    const c = t.checkInAttention!
+    expect(c.answer).toBe('off_task')
+    expect(c.nBefore).toBe(15)
+    expect(c.scoreBefore).toBeCloseTo(0.7, 9)
+    expect(c.sessionMean!).toBeLessThan(c.scoreBefore!)
+  })
+
+  it('reports a skipped check-in as no answer', () => {
+    const t = buildTimeline(session({
+      gazeEnabled: true,
+      events: [
+        att(50_000, { status: 'ok', score: 0.5, trend: 0.5 }),
+        ev('check_in_shown', 60_000),
+        ev('check_in_skipped', 62_000),
+      ],
+    }))
+    expect(t.checkInAttention?.answer).toBeNull()
+  })
+})

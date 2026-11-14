@@ -8,6 +8,7 @@ import {
   EventType,
   SCHEMA_VERSION,
   type SessionTaskSettings,
+  type GazeSessionInfo,
 } from './types'
 import { loadSession, saveSession, clearSession, StorageError } from './storage'
 
@@ -44,6 +45,13 @@ function makeEvent(
   }
 }
 
+export interface StartOptions {
+  cameraEnabled?: boolean
+  gazeEnabled?: boolean
+  gaze?: GazeSessionInfo
+  taskSettings?: SessionTaskSettings
+}
+
 export interface SessionUIState {
   status: SessionStatus
   remainingMs: number
@@ -54,7 +62,7 @@ export interface SessionUIState {
 }
 
 export interface SessionActions {
-  start: (opts?: { cameraEnabled?: boolean; taskSettings?: SessionTaskSettings }) => void
+  start: (opts?: StartOptions) => void
   pause: () => void
   resume: () => void
   finish: () => void
@@ -431,7 +439,7 @@ export function useSession(): SessionUIState & SessionActions {
 
   // ── Actions ───────────────────────────────────────────────────────────
 
-  const start = useCallback((opts?: { cameraEnabled?: boolean; taskSettings?: SessionTaskSettings }) => {
+  const start = useCallback((opts?: StartOptions) => {
     // Only allowed from idle with no active session, OR after deleting data
     const s = sessionRef.current
     if (s && s.status !== 'idle') return
@@ -457,6 +465,8 @@ export function useSession(): SessionUIState & SessionActions {
       endReason: null,
       checkIn: null,
       cameraEnabled: opts?.cameraEnabled === true,
+      gazeEnabled: opts?.gazeEnabled === true,
+      gaze: opts?.gaze,
       taskSettings: opts?.taskSettings
         ? { ...opts.taskSettings, rules: { ...opts.taskSettings.rules } }
         : undefined,

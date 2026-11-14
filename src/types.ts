@@ -36,6 +36,43 @@ export type EventType =
   | 'camera_stopped'          // stream closed (pause/checking_in/page hidden/completed)
   | 'camera_error'            // error acquiring stream or loading model
   | 'face_detection_changed'  // detected→not_detected or vice-versa; also unavailable transitions
+  // Gaze events (eye-tracking mode)
+  | 'attention_score'         // one mind-wandering estimate per model step (every 2 s)
+  | 'gaze_error'              // WebGazer failed during the session
+
+// ── Gaze (eye-tracking mode) ─────────────────────────────────────────────
+
+/** good ≈ the 'webcam_typical' simulation or better; usable ≈ 'webcam_poor'; poor = worse than simulated */
+export type GazeQuality = 'good' | 'usable' | 'poor'
+
+export interface CalibrationPointResult {
+  /** Target position in px (viewport coordinates) */
+  x: number
+  y: number
+  /** Distance from the mean prediction to the target (systematic offset); null if no predictions */
+  accuracyPx: number | null
+  /** RMS distance of predictions from their own mean (jitter); null if < 2 predictions */
+  precisionPx: number | null
+  nValid: number
+  n: number
+}
+
+export interface CalibrationSummary {
+  quality: GazeQuality
+  accuracyPx: number | null
+  precisionPx: number | null
+  /** Share of validation samples that had a prediction */
+  validRatio: number
+  viewport: { width: number; height: number }
+  points: CalibrationPointResult[]
+  calibratedAt: number
+}
+
+export interface GazeSessionInfo {
+  calibration: CalibrationSummary
+  /** Cross-validated AUC of the model in use (from model.json), kept for later comparison */
+  modelCvRocAuc: number
+}
 
 export interface SessionEvent {
   id: string
@@ -73,6 +110,10 @@ export interface Session {
   events: SessionEvent[]
   /** Whether user chose camera mode for this session (optional for backward compat) */
   cameraEnabled?: boolean
+  /** Whether the session used eye-tracking (WebGazer) mode */
+  gazeEnabled?: boolean
+  /** Calibration result for eye-tracking mode */
+  gaze?: GazeSessionInfo
   /** Immutable copy of task settings at session start. Absent in sessions from before this feature. */
   taskSettings?: SessionTaskSettings
 }
