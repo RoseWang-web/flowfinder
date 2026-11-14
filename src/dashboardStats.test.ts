@@ -5,6 +5,7 @@ import {
   isValidScore,
   isEligibleForAverage,
   computeWeightedAverage,
+  getEffectiveScore,
   localDateString,
   addDays,
   todayString,
@@ -382,4 +383,119 @@ describe('formatScore', () => {
   it('rounds to nearest integer and appends %', () => expect(formatScore(75.6)).toBe('76%'))
   it('formats 0 as "0%" not "—"', () => expect(formatScore(0)).toBe('0%'))
   it('returns "—" for null', () => expect(formatScore(null)).toBe('—'))
+})
+
+// ── getEffectiveScore ─────────────────────────────────────────────────────────
+
+describe('getEffectiveScore', () => {
+  it('returns system score when no override', () => {
+    expect(getEffectiveScore(makeEntry({}, { totalScore: 70 }))).toBe(70)
+  })
+
+  it('returns manual override score when present (even if system is pending)', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({}, { totalScore: null, status: 'pending' }),
+      manualOverride: { score: 85, overriddenAt: 1 },
+    }
+    expect(getEffectiveScore(e)).toBe(85)
+  })
+
+  it('manual score = 0 returns 0, not null', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({}, { totalScore: 70 }),
+      manualOverride: { score: 0, overriddenAt: 1 },
+    }
+    expect(getEffectiveScore(e)).toBe(0)
+  })
+
+  it('falls back to system score when manualOverride has out-of-range score', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({}, { totalScore: 60 }),
+      manualOverride: { score: 150, overriddenAt: 1 },
+    }
+    expect(getEffectiveScore(e)).toBe(60)
+  })
+
+  it('returns null when both system and override are absent', () => {
+    expect(getEffectiveScore(makeEntry({}, { totalScore: null, status: 'pending' }))).toBeNull()
+  })
+
+  it('override score takes precedence over valid system score', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({}, { totalScore: 70 }),
+      manualOverride: { score: 42, overriddenAt: 1 },
+    }
+    expect(getEffectiveScore(e)).toBe(42)
+  })
+})
+
+// ── isEligibleForAverage with manual override ─────────────────────────────────
+
+describe('isEligibleForAverage with manual override', () => {
+  it('manual score on pending analysis makes entry eligible', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({ endReason: 'manual', activeReadingMs: 10_000 }, { status: 'pending', totalScore: null }),
+      manualOverride: { score: 75, overriddenAt: 1 },
+    }
+    expect(isEligibleForAverage(e)).toBe(true)
+  })
+
+  it('manual score = 0 is eligible', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({ activeReadingMs: 1000 }, { totalScore: null, status: 'pending' }),
+      manualOverride: { score: 0, overriddenAt: 1 },
+    }
+    expect(isEligibleForAverage(e)).toBe(true)
+  })
+
+  it('manual override does not bypass interrupted endReason', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({ endReason: 'interrupted', activeReadingMs: 10_000 }, {}),
+      manualOverride: { score: 75, overriddenAt: 1 },
+    }
+    expect(isEligibleForAverage(e)).toBe(false)
+  })
+
+  it('manual override does not bypass zero activeReadingMs', () => {
+    const e: HistoryEntry = {
+      ...makeEntry({ activeReadingMs: 0 }, {}),
+      manualOverride: { score: 75, overriddenAt: 1 },
+    }
+    expect(isEligibleForAverage(e)).toBe(false)
+  })
+})
+
+// ── computeWeightedAverage scenario: modify then restore ──────────────────────
+
+describe('computeWeightedAverage with manual overrides', () => {
+  it('10min@90 + 30min@50 = 60', () => {
+    const a = makeEntry({ sessionId: 'a', activeReadingMs: 10 * 60_000 }, { sessionId: 'a', totalScore: 90 })
+    const b = makeEntry({ sessionId: 'b', activeReadingMs: 30 * 60_000 }, { sessionId: 'b', totalScore: 50 })
+    expect(computeWeightedAverage([a, b])).toBeCloseTo(60, 5)
+  })
+
+  it('after overriding second entry score to 70, avg becomes 75', () => {
+    const a = makeEntry({ sessionId: 'a', activeReadingMs: 10 * 60_000 }, { sessionId: 'a', totalScore: 90 })
+    const b: HistoryEntry = {
+      ...makeEntry({ sessionId: 'b', activeReadingMs: 30 * 60_000 }, { sessionId: 'b', totalScore: 50 }),
+      manualOverride: { score: 70, overriddenAt: 1 },
+    }
+    // (90*10 + 70*30) / 40 = 3000/40 = 75
+    expect(computeWeightedAverage([a, b])).toBeCloseTo(75, 5)
+  })
+
+  it('after clearing override, avg returns to 60', () => {
+    const a = makeEntry({ sessionId: 'a', activeReadingMs: 10 * 60_000 }, { sessionId: 'a', totalScore: 90 })
+    const b = makeEntry({ sessionId: 'b', activeReadingMs: 30 * 60_000 }, { sessionId: 'b', totalScore: 50 })
+    expect(computeWeightedAverage([a, b])).toBeCloseTo(60, 5)
+  })
+
+  it('pending-analysis entry with manual override is included in average', () => {
+    const a = makeEntry({ sessionId: 'a', activeReadingMs: 10 * 60_000 }, { sessionId: 'a', totalScore: 90 })
+    const b: HistoryEntry = {
+      ...makeEntry({ sessionId: 'b', activeReadingMs: 30 * 60_000 }, { sessionId: 'b', totalScore: null, status: 'pending' }),
+      manualOverride: { score: 50, overriddenAt: 1 },
+    }
+    expect(computeWeightedAverage([a, b])).toBeCloseTo(60, 5)
+  })
 })

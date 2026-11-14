@@ -48,12 +48,25 @@ export function isValidScore(score: number | null | undefined): score is number 
 // ── Eligibility for weighted average ─────────────────────────────────────────
 // Spec §11: only completed (time_up / manual), analysis ready, valid score, activeMs > 0
 
+/**
+ * Returns the score to use for display and aggregation:
+ * - manualOverride.score if present and valid
+ * - analysis.totalScore if valid
+ * - null otherwise
+ *
+ * 0 is a valid score; never use truthy checks.
+ */
+export function getEffectiveScore(entry: HistoryEntry): number | null {
+  const mo = entry.manualOverride
+  if (mo !== undefined && isValidScore(mo.score)) return mo.score
+  return isValidScore(entry.analysis.totalScore) ? entry.analysis.totalScore : null
+}
+
 export function isEligibleForAverage(entry: HistoryEntry): boolean {
-  const { session, analysis } = entry
+  const { session } = entry
   if (session.endReason !== 'time_up' && session.endReason !== 'manual') return false
-  if (analysis.status !== 'ready') return false
-  if (!isValidScore(analysis.totalScore)) return false
   if (session.activeReadingMs <= 0) return false
+  if (!isValidScore(getEffectiveScore(entry))) return false
   return true
 }
 
@@ -67,7 +80,7 @@ export function computeWeightedAverage(entries: HistoryEntry[]): number | null {
 
   for (const e of entries) {
     if (!isEligibleForAverage(e)) continue
-    const score = e.analysis.totalScore as number
+    const score = getEffectiveScore(e) as number
     const ms = e.session.activeReadingMs
     weightedSum += score * ms
     totalWeight += ms
@@ -235,9 +248,7 @@ export function computePeriodSummary(entries: HistoryEntry[]): PeriodSummary {
 
   for (const e of entries) {
     totalActiveMs += e.session.activeReadingMs
-    if (isEligibleForAverage(e)) {
-      eligibleActiveMs += e.session.activeReadingMs
-    }
+    if (isEligibleForAverage(e)) eligibleActiveMs += e.session.activeReadingMs
   }
 
   return {
