@@ -13,7 +13,7 @@ flowfinder comes in two forms that share the same data format and dashboard.
 ### Web app
 
 - **Set up** a session: name what you're reading, choose what counts as leaving the reading (looking down, switching tabs, leaving the window), and pick a duration (15 / 30 / 45 min, custom up to 240 min, or open-ended).
-- **Read** the built-in article, *The Art of Deep Reading*, with a timer. Optional **eye tracking** starts with a short calibration.
+- **Focus page** with your task and a ring timer (pause, finish). Optional **eye tracking** starts with a short calibration.
 - **Quick check-in** panel beside the article ("Just before this question, was your attention on your task?"). Answers are shown on screen but are not yet saved with the session.
 - **Overtime**: when time is up, keep going or finish.
 - **Review** a timeline of the session's events.
@@ -116,7 +116,7 @@ src/                      Web app (React + TypeScript + Vite)
   historyStorage.ts       Multi-session history (localStorage)
   sessionAnalysis.ts      Session focus score from attention events
   dashboardStats.ts       Score bands and period summaries
-  article.ts              The built-in article
+  article.ts              Sample article (not shown in the current UI)
 extension/                Chrome extension (Manifest V3); see extension/README.md
   src/engine/             Offscreen engine: camera, model, timer, quality guard
   src/popup/              Toolbar popup
@@ -138,6 +138,7 @@ extension/                Chrome extension (Manifest V3); see extension/README.m
 - Webcam noise can still look like focus; the quality guard skips such windows but does not make the model more accurate.
 - If the eyes keep moving across lines while the mind is elsewhere, eye movements alone can't catch it.
 - Self-reports are not yet saved with sessions, so the estimate can't be compared with how the reader felt.
+- The web app's focus page no longer shows an article, so its eye-tracking estimate isn't measuring reading. Reading on web pages is covered by the extension.
 - Reading only. Studying, coding, or writing involve different eye and body patterns and need their own signals.
 - The model training notebook is not in this repository yet.
 
