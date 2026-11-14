@@ -8,8 +8,8 @@ export interface CategoryMeta {
 }
 
 export const CATEGORIES: readonly CategoryMeta[] = [
-  { id: 'web_reading', label: '網頁閱讀' },
-  { id: 'study_notes', label: '學習／筆記' },
+  { id: 'web_reading', label: 'Web Reading' },
+  { id: 'study_notes', label: 'Study / Notes' },
 ] as const
 
 export const SYSTEM_DEFAULTS: Readonly<Record<CategoryId, Readonly<TaskRules>>> = {
@@ -37,15 +37,15 @@ export function loadTaskPreferences(cat: CategoryId): LoadPrefResult {
     if (raw === null) return { ok: false, empty: true }
     const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null) {
-      return { ok: false, error: { kind: 'invalid_structure', message: '任務偏好格式錯誤，將使用系統預設。' } }
+      return { ok: false, error: { kind: 'invalid_structure', message: 'Task preferences format invalid, using system defaults.' } }
     }
     const obj = parsed as Record<string, unknown>
     if (obj.rulesVersion !== TASK_RULES_VERSION) {
-      return { ok: false, error: { kind: 'version_mismatch', message: '任務偏好版本不支援，將使用系統預設。' } }
+      return { ok: false, error: { kind: 'version_mismatch', message: 'Task preferences version unsupported, using system defaults.' } }
     }
     const rules = obj.rules
     if (typeof rules !== 'object' || rules === null) {
-      return { ok: false, error: { kind: 'invalid_structure', message: '任務偏好格式錯誤，將使用系統預設。' } }
+      return { ok: false, error: { kind: 'invalid_structure', message: 'Task preferences format invalid, using system defaults.' } }
     }
     const r = rules as Record<string, unknown>
     if (
@@ -53,7 +53,7 @@ export function loadTaskPreferences(cat: CategoryId): LoadPrefResult {
       typeof r.allowTabSwitch !== 'boolean' ||
       typeof r.allowWindowBlur !== 'boolean'
     ) {
-      return { ok: false, error: { kind: 'invalid_structure', message: '任務偏好格式錯誤，將使用系統預設。' } }
+      return { ok: false, error: { kind: 'invalid_structure', message: 'Task preferences format invalid, using system defaults.' } }
     }
     return {
       ok: true,
@@ -64,7 +64,7 @@ export function loadTaskPreferences(cat: CategoryId): LoadPrefResult {
       },
     }
   } catch {
-    return { ok: false, error: { kind: 'parse_error', message: '任務偏好無法解析，將使用系統預設。' } }
+    return { ok: false, error: { kind: 'parse_error', message: 'Task preferences could not be parsed, using system defaults.' } }
   }
 }
 
@@ -73,7 +73,7 @@ export function saveTaskPreferences(cat: CategoryId, rules: TaskRules): TaskPref
     localStorage.setItem(prefKey(cat), JSON.stringify({ rulesVersion: TASK_RULES_VERSION, rules }))
     return null
   } catch {
-    return { kind: 'write_error', message: '無法儲存任務偏好設定。你仍可使用目前草稿繼續。' }
+    return { kind: 'write_error', message: 'Could not save task preferences. You can still continue with the current settings.' }
   }
 }
 
@@ -82,7 +82,7 @@ export function clearTaskPreferences(cat: CategoryId): TaskPrefError | null {
     localStorage.removeItem(prefKey(cat))
     return null
   } catch {
-    return { kind: 'write_error', message: '無法清除已儲存的偏好設定。草稿已恢復系統預設。' }
+    return { kind: 'write_error', message: 'Could not clear saved preferences. Draft has been reset to system defaults.' }
   }
 }
 

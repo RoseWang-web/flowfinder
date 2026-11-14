@@ -388,7 +388,7 @@ describe('useCamera — Face Landmarker path', () => {
     expect(result.current.cameraStatus).toBe('ready')
     expect(result.current.detectorKind).toBe('detector')
     expect(adapter.loadFaceDetector).toHaveBeenCalledOnce()
-    expect(result.current.landmarkerFallbackMsg).toMatch(/進階臉部觀察無法啟用/)
+    expect(result.current.landmarkerFallbackMsg).toMatch(/Advanced face observation unavailable/)
   })
 
   it('3. Landmarker fails + Detector succeeds → original face events still fire', async () => {

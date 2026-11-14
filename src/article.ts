@@ -5,21 +5,21 @@ export interface Article {
 }
 
 export const article: Article = {
-  title: '深度閱讀的藝術',
-  subtitle: '在資訊爆炸的時代，重新找回閱讀的專注力',
+  title: 'The Art of Deep Reading',
+  subtitle: 'Reclaiming focused attention in an age of information overload',
   paragraphs: [
-    '在這個資訊爆炸的時代，我們每天接收的文字量遠超過任何歷史時期。從早晨睜開眼睛的那一刻起，社群媒體的動態、新聞標題、工作訊息如同洪流般湧入，讓大腦在還沒完全清醒之前就陷入了資訊的漩渦。然而，真正的閱讀——那種需要靜下心來、一字一句細細品味的閱讀——在這個時代顯得愈發珍貴，也愈發困難。',
+    'In an era of information overload, the volume of text we consume each day far exceeds anything in human history. From the moment we open our eyes in the morning, social media feeds, news headlines, and work messages pour in like a flood, pulling the mind into a swirl of data before it has fully woken up. Yet genuine reading — the kind that asks us to slow down and savor each sentence — has become both more precious and more difficult.',
 
-    '心理學家將閱讀分為兩種模式：掃描式閱讀與深度閱讀。掃描式閱讀讓我們快速擷取關鍵資訊，適合瀏覽標題或搜尋特定內容；深度閱讀則需要我們放慢腳步，讓文字在腦海中構築完整的圖像與概念。研究顯示，深度閱讀不僅能增進理解力，更能激活大腦中負責同理心與批判性思考的區域，是培養智識深度不可或缺的活動。',
+    'Psychologists distinguish two modes of reading: scanning and deep reading. Scanning lets us quickly extract key information, ideal for skimming headlines or searching for a specific detail. Deep reading asks us to slow down and let language build a complete picture in the mind. Research shows that deep reading not only improves comprehension but activates the regions of the brain responsible for empathy and critical thinking — it is an indispensable activity for cultivating intellectual depth.',
 
-    '然而，現代人的閱讀習慣已悄然改變。長期習慣碎片化資訊的大腦，在面對需要持續專注的長篇文章時，往往會產生一種隱隱的不適感——就像長時間不運動的人突然跑步，肌肉會發出抗議的信號。這種不適感讓許多人在閱讀途中頻繁中斷，拿起手機查看通知，或是在同一段落重複來回卻無法吸收其中的意涵。',
+    'Modern reading habits, however, have quietly shifted. A brain long accustomed to fragmented information often encounters a subtle discomfort when faced with a long article that demands sustained focus — much like muscles protesting when a sedentary person suddenly goes for a run. That discomfort leads many people to interrupt their reading repeatedly: picking up a phone to check notifications, or rereading the same paragraph without absorbing its meaning.',
 
-    '重建深度閱讀能力的關鍵，在於刻意練習。神經科學的研究告訴我們，大腦具有高度的可塑性——哪怕是長期碎片化閱讀的習慣，也可以透過持續的訓練加以改變。從每天固定抽出二十分鐘，放下手機、關閉通知、專心閱讀一篇文章或書中的章節開始。起初可能坐立難安，思緒不斷飄離，但只要堅持，專注的時間會逐漸延長，閱讀的樂趣也會慢慢回歸。',
+    'The key to rebuilding deep reading ability is deliberate practice. Neuroscience tells us the brain is highly plastic — even a long-entrenched habit of fragmented reading can be changed through consistent training. Start by setting aside twenty minutes each day: put down your phone, turn off notifications, and read a single article or book chapter with full attention. It may feel restless at first, with thoughts drifting away, but with persistence, focus lengthens and the pleasure of reading gradually returns.',
 
-    '環境的設計同樣重要。選擇一個光線充足、相對安靜的角落，備一杯茶或咖啡，告訴自己接下來的時間屬於閱讀。有些人喜歡用紙本書籍，因為翻頁的觸感與書本的氣味能喚起一種儀式感；另一些人則習慣在閱讀時做筆記，用自己的語言整理理解，這種主動參與的過程能顯著提升記憶的留存率。',
+    'Environment design matters just as much. Choose a well-lit, reasonably quiet corner, make a cup of tea or coffee, and tell yourself this time belongs to reading. Some people prefer physical books, because the tactile sensation of turning pages and the smell of paper evoke a sense of ritual. Others take notes while reading, organizing their understanding in their own words — this active engagement significantly improves memory retention.',
 
-    '深度閱讀帶來的，不只是知識的積累，更是一種思維方式的培養。當我們習慣跟隨一位作者的思路，理解其論點的脈絡與邏輯，我們也在訓練自己進行系統性的思考。長期下來，這種能力會滲透到生活的各個層面——讓我們在面對複雜問題時更能抽絲剝繭，在理解他人時更能設身處地，在表達自我時更能條理分明。',
+    'Deep reading offers more than knowledge accumulation; it cultivates a way of thinking. When we habitually follow an author\'s reasoning and grasp the logic and context of their argument, we train ourselves in systematic thought. Over time, this capacity permeates every dimension of life — helping us untangle complex problems, understand others more empathetically, and express ourselves with greater clarity.',
 
-    '此刻，你正在閱讀這篇文章，就是深度閱讀的一次實踐。無論是否有計時的壓力，試著讓文字在腦海中慢慢展開，感受每個句子的重量。閱讀不是一場比賽，沒有人能評判你讀得夠不夠快或夠不夠深。它是一段與作者之間的私密對話，一次讓思想自由漫遊的旅程，也是在紛擾世界中找尋片刻寧靜的方式。',
+    'Right now, reading this article is itself an act of deep reading. Whether or not there is a timer running, try to let the words slowly unfold in your mind and feel the weight of each sentence. Reading is not a race; no one can judge whether you read fast enough or deeply enough. It is a private conversation with an author, a journey that lets thought roam freely, and a way to find a moment of quiet in a noisy world.',
   ],
 }

@@ -47,17 +47,17 @@ type DashboardMode = 'real' | 'demo'
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
-const WEEK_DAYS = ['一', '二', '三', '四', '五', '六', '日']
+const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function endReasonLabel(r: Session['endReason']): string {
-  if (r === 'time_up') return '時間到'
-  if (r === 'manual') return '提前結束'
-  if (r === 'interrupted') return '已中斷'
+  if (r === 'time_up') return "Time's Up"
+  if (r === 'manual') return 'Ended Early'
+  if (r === 'interrupted') return 'Interrupted'
   return '—'
 }
 
 function categoryLabel(categoryId: string | undefined): string {
-  if (!categoryId) return '未分類'
+  if (!categoryId) return 'Uncategorized'
   return CATEGORIES.find(c => c.id === categoryId)?.label ?? categoryId
 }
 
@@ -70,7 +70,7 @@ function ScoreBadge({ score, size = 'sm' }: { score: number | null; size?: 'sm' 
     <span
       className={`score-badge score-badge-${size}`}
       style={{ background: color.bg, color: color.text }}
-      aria-label={`專注度 ${display}`}
+      aria-label={`Focus ${display}`}
     >
       {display}
     </span>
@@ -80,7 +80,7 @@ function ScoreBadge({ score, size = 'sm' }: { score: number | null; size?: 'sm' 
 // ── Session detail panel ──────────────────────────────────────────────────────
 
 const GRADE_LABELS: Record<'green' | 'yellow' | 'orange' | 'red', string> = {
-  green: '優秀', yellow: '良好', orange: '普通', red: '偏低',
+  green: 'Excellent', yellow: 'Good', orange: 'Fair', red: 'Low',
 }
 
 function SessionDetail({
@@ -157,10 +157,10 @@ function SessionDetail({
   }
 
   return (
-    <div className="detail-panel" role="dialog" aria-modal="true" aria-label="閱讀場次詳情">
+    <div className="detail-panel" role="dialog" aria-modal="true" aria-label="Session Details">
       <div className="detail-header">
-        <h3 className="detail-title">場次詳情</h3>
-        <button className="btn-icon" onClick={onClose} aria-label="關閉">✕</button>
+        <h3 className="detail-title">Session Details</h3>
+        <button className="btn-icon" onClick={onClose} aria-label="Close">✕</button>
       </div>
 
       {/* Score hero */}
@@ -168,7 +168,7 @@ function SessionDetail({
         <div className="detail-score-hero-top">
           <ScoreBadge score={effectiveScore} size="md" />
           {entry.manualOverride !== undefined && (
-            <span className="manual-modified-badge">已手動修改</span>
+            <span className="manual-modified-badge">Manually Adjusted</span>
           )}
         </div>
         <div className="detail-score-info">
@@ -180,7 +180,7 @@ function SessionDetail({
               )}
             </>
           ) : (
-            <p className="detail-score-summary">尚無分析結果</p>
+            <p className="detail-score-summary">No analysis available</p>
           )}
         </div>
       </div>
@@ -189,66 +189,71 @@ function SessionDetail({
       {entry.manualOverride !== undefined && (
         <div className="system-score-row">
           <div className="system-score-line">
-            <span className="system-score-label">系統原始分數：</span>
+            <span className="system-score-label">AI Score: </span>
             <span className="system-score-value">
-              {isValidScore(analysis.totalScore) ? `${Math.round(analysis.totalScore as number)}%` : '尚無系統評分'}
+              {isValidScore(analysis.totalScore) ? `${Math.round(analysis.totalScore as number)}%` : 'No AI score yet'}
             </span>
           </div>
           <div className="system-score-meta">
-            <span>修改時間：{localDateTimeString(entry.manualOverride.overriddenAt, tz)}</span>
+            <span>Adjusted: {localDateTimeString(entry.manualOverride.overriddenAt, tz)}</span>
             {entry.manualOverride.reason && (
-              <span>原因：{entry.manualOverride.reason}</span>
+              <span>Reason: {entry.manualOverride.reason}</span>
             )}
           </div>
         </div>
       )}
 
       {analysis.source === 'mock' && (
-        <p className="detail-mock-note">⚠ 示範資料，非真實分析</p>
+        <p className="detail-mock-note">⚠ Demo data — not real analysis</p>
       )}
 
       <div className="detail-stats">
         <div className="detail-stat-row">
-          <span className="detail-stat-label">開始時間</span>
+          <span className="detail-stat-label">Start</span>
           <span className="detail-stat-value">{localDateTimeString(session.startedAt, tz)}</span>
         </div>
         {session.endedAt && (
           <div className="detail-stat-row">
-            <span className="detail-stat-label">結束時間</span>
+            <span className="detail-stat-label">End</span>
             <span className="detail-stat-value">{localDateTimeString(session.endedAt, tz)}</span>
           </div>
         )}
         <div className="detail-stat-row">
-          <span className="detail-stat-label">閱讀計時</span>
+          <span className="detail-stat-label">Active Time</span>
           <span className="detail-stat-value">{msToHHMM(session.activeReadingMs)}</span>
         </div>
         <div className="detail-stat-row">
-          <span className="detail-stat-label">本次經過</span>
+          <span className="detail-stat-label">Total Elapsed</span>
           <span className="detail-stat-value">{msToHHMM(session.durationMs)}</span>
         </div>
         <div className="detail-stat-row">
-          <span className="detail-stat-label">結束原因</span>
+          <span className="detail-stat-label">Planned Duration</span>
+          <span className="detail-stat-value">
+            {session.plannedDurationMs === 0 ? '∞ Unlimited' : msToHHMM(session.plannedDurationMs ?? 120_000)}
+          </span>
+        </div>
+        <div className="detail-stat-row">
+          <span className="detail-stat-label">End Reason</span>
           <span className="detail-stat-value">{endReasonLabel(session.endReason)}</span>
         </div>
         <div className="detail-stat-row">
-          <span className="detail-stat-label">任務分類</span>
+          <span className="detail-stat-label">Category</span>
           <span className="detail-stat-value">{categoryLabel(session.taskSettings?.categoryId)}</span>
         </div>
         <div className="detail-stat-row">
-          <span className="detail-stat-label">攝影機</span>
-          <span className="detail-stat-value">{session.cameraEnabled ? '已啟用' : '未使用'}</span>
+          <span className="detail-stat-label">Camera</span>
+          <span className="detail-stat-value">{session.cameraEnabled ? 'Enabled' : 'Not Used'}</span>
         </div>
         {analysis.scoringVersion && (
           <div className="detail-stat-row">
-            <span className="detail-stat-label">分析版本</span>
+            <span className="detail-stat-label">Analysis v</span>
             <span className="detail-stat-value">{analysis.scoringVersion}</span>
           </div>
         )}
       </div>
 
       <p className="detail-disclaimer">
-        每場顏色代表整場估計分數，不代表其中每一分鐘的狀態。
-        顏色分級僅為介面輔助，非經驗證的醫學或心理分界。
+        Colors represent the overall estimated score for each session, not minute-by-minute. Grades are UI aids — not medically or psychologically validated.
       </p>
 
       {/* Timeline toggle */}
@@ -256,7 +261,7 @@ function SessionDetail({
         className="btn btn-secondary btn-small detail-expand-btn"
         onClick={() => setShowTimeline(v => !v)}
       >
-        {showTimeline ? '▲' : '▼'} 觀察時間軸
+        {showTimeline ? '▲' : '▼'} Timeline
       </button>
       {showTimeline && (
         <div className="detail-timeline">
@@ -269,7 +274,7 @@ function SessionDetail({
         className="btn btn-secondary btn-small detail-expand-btn"
         onClick={() => setShowEvents(v => !v)}
       >
-        {showEvents ? '▲' : '▼'} 事件紀錄
+        {showEvents ? '▲' : '▼'} Event Log
       </button>
       {showEvents && (
         <div className="detail-event-list">
@@ -286,11 +291,11 @@ function SessionDetail({
 
       {/* Manual override controls */}
       {isDemo ? (
-        <p className="detail-demo-note">示範資料不可修改</p>
+        <p className="detail-demo-note">Demo data cannot be edited</p>
       ) : editing ? (
         <div className="edit-form">
           <div className="edit-form-row">
-            <label htmlFor="edit-score-input" className="edit-form-label">評分（0–100）</label>
+            <label htmlFor="edit-score-input" className="edit-form-label">Score (0–100)</label>
             <input
               id="edit-score-input"
               type="number"
@@ -304,7 +309,7 @@ function SessionDetail({
           </div>
           {scoreError && <p className="edit-score-error">{scoreError}</p>}
           <div className="edit-form-row">
-            <label htmlFor="edit-reason-input" className="edit-form-label">原因（選填，最多 300 字）</label>
+            <label htmlFor="edit-reason-input" className="edit-form-label">Reason (optional, max 300 chars)</label>
             <textarea
               id="edit-reason-input"
               className="edit-reason-input"
@@ -316,15 +321,15 @@ function SessionDetail({
           </div>
           {saveError && <p className="edit-save-error">⚠ {saveError}</p>}
           <div className="edit-form-buttons">
-            <button className="btn btn-primary btn-small" onClick={handleSave}>儲存</button>
-            <button className="btn btn-ghost btn-small" onClick={() => { setEditing(false); setSaveError(null) }}>取消</button>
+            <button className="btn btn-primary btn-small" onClick={handleSave}>Save</button>
+            <button className="btn btn-ghost btn-small" onClick={() => { setEditing(false); setSaveError(null) }}>Cancel</button>
           </div>
         </div>
       ) : (
         <div className="detail-override-controls">
-          <button className="btn btn-secondary btn-small" onClick={handleOpenEdit}>修改評分</button>
+          <button className="btn btn-secondary btn-small" onClick={handleOpenEdit}>Override Score</button>
           {entry.manualOverride !== undefined && (
-            <button className="btn btn-ghost btn-small" onClick={handleRestore}>恢復系統評分</button>
+            <button className="btn btn-ghost btn-small" onClick={handleRestore}>Restore AI Score</button>
           )}
         </div>
       )}
@@ -337,24 +342,24 @@ function SessionDetail({
               className="btn btn-ghost btn-small"
               onClick={() => setConfirmDelete(true)}
             >
-              刪除此紀錄
+              Delete Session
             </button>
           ) : (
             <div className="detail-delete-confirm">
-              <p>確定要刪除此紀錄嗎？刪除後無法復原。</p>
+              <p>Delete this session? This cannot be undone.</p>
               <div className="detail-delete-buttons">
                 <button
                   className="btn btn-primary btn-small"
                   style={{ background: '#dc2626' }}
                   onClick={() => onDelete(session.sessionId)}
                 >
-                  確定刪除
+                  Confirm Delete
                 </button>
                 <button
                   className="btn btn-ghost btn-small"
                   onClick={() => setConfirmDelete(false)}
                 >
-                  取消
+                  Cancel
                 </button>
               </div>
             </div>
@@ -378,7 +383,7 @@ function DayView({
   const sorted = [...entries].sort((a, b) => a.session.startedAt - b.session.startedAt)
 
   if (sorted.length === 0) {
-    return <p className="dash-empty-day">當日無紀錄</p>
+    return <p className="dash-empty-day">No sessions on this day</p>
   }
 
   return (
@@ -393,7 +398,7 @@ function DayView({
             className="day-session-card"
             style={{ borderLeftColor: color.bg }}
             onClick={() => onSelectEntry(entry)}
-            aria-label={`場次 ${localTimeString(session.startedAt, tz)}, 分數 ${formatScore(effectiveScore)}`}
+            aria-label={`Session at ${localTimeString(session.startedAt, tz)}, score ${formatScore(effectiveScore)}`}
           >
             <div className="day-session-time">
               <span>{localTimeString(session.startedAt, tz)}</span>
@@ -441,7 +446,7 @@ function WeekView({
             className={`week-day-cell ${isToday ? 'week-day-today' : ''} ${!hasData ? 'week-day-empty' : ''}`}
             style={hasData ? { background: color.light, borderColor: color.bg } : {}}
             onClick={() => onSelectDay(date)}
-            aria-label={`${date} ${hasData ? formatScore(avg) + '分' : '無紀錄'}`}
+            aria-label={`${date} ${hasData ? formatScore(avg) : 'No data'}`}
           >
             <span className="week-day-name">{WEEK_DAYS[i]}</span>
             <span className="week-day-date">{date.slice(8)}</span>
@@ -449,7 +454,7 @@ function WeekView({
               <>
                 <ScoreBadge score={avg} />
                 <span className="week-day-active">{msToHHMM(totalActive)}</span>
-                <span className="week-day-count">{entries.length}場</span>
+                <span className="week-day-count">{entries.length} session{entries.length !== 1 ? 's' : ''}</span>
               </>
             ) : (
               <span className="week-day-no-data">—</span>
@@ -503,7 +508,7 @@ function MonthView({
                 className={`month-day-cell ${isToday ? 'month-day-today' : ''} ${hasData ? 'month-day-has-data' : ''}`}
                 style={hasData ? { background: color.light, borderColor: color.bg } : {}}
                 onClick={() => onSelectDay(date)}
-                aria-label={`${date} ${hasData ? formatScore(avg) + '分' : '無紀錄'}`}
+                aria-label={`${date} ${hasData ? formatScore(avg) : 'No data'}`}
                 disabled={!hasData && date > today}
               >
                 <span className="month-day-num">{dayNum}</span>
@@ -537,15 +542,15 @@ function SummaryBar({ entries }: { entries: HistoryEntry[] }) {
     <div className="summary-bar">
       <div className="summary-stat">
         <span className="summary-stat-value">{summary.count}</span>
-        <span className="summary-stat-label">場次</span>
+        <span className="summary-stat-label">Sessions</span>
       </div>
       <div className="summary-stat">
         <span className="summary-stat-value">{msToHHMM(summary.totalActiveMs)}</span>
-        <span className="summary-stat-label">閱讀計時</span>
+        <span className="summary-stat-label">Active Time</span>
       </div>
       <div className="summary-stat">
         <span className="summary-stat-value">{msToHHMM(summary.eligibleActiveMs)}</span>
-        <span className="summary-stat-label">計分時長</span>
+        <span className="summary-stat-label">Scored Time</span>
       </div>
       <div className="summary-stat">
         {isValidScore(avg) ? (
@@ -558,7 +563,7 @@ function SummaryBar({ entries }: { entries: HistoryEntry[] }) {
         ) : (
           <span className="summary-stat-value summary-avg-score summary-avg-none">—</span>
         )}
-        <span className="summary-stat-label">加權平均專注度</span>
+        <span className="summary-stat-label">Avg Focus Score</span>
       </div>
     </div>
   )
@@ -714,9 +719,9 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
       const isToday = focusDate === todayString(tz)
       const isTomorrow = focusDate === addDays(todayString(tz), 1)
       const isYesterday = focusDate === addDays(todayString(tz), -1)
-      if (isToday) return '今天'
-      if (isYesterday) return '昨天'
-      if (isTomorrow) return '明天'
+      if (isToday) return 'Today'
+      if (isYesterday) return 'Yesterday'
+      if (isTomorrow) return 'Tomorrow'
       return focusDate
     }
     if (view === 'week') {
@@ -734,11 +739,11 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
       <header className="dash-header">
         <div className="dash-header-left">
           <h1 className="dash-brand">flowfinder</h1>
-          <span className="dash-local-badge">本機模式</span>
+          <span className="dash-local-badge">Local Mode</span>
         </div>
         <div className="dash-header-right">
           <button className="btn btn-primary btn-small" onClick={onStartNewSession}>
-            開始新閱讀
+            New Session
           </button>
         </div>
       </header>
@@ -749,16 +754,16 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
           className={`dash-mode-btn ${mode === 'real' ? 'active' : ''}`}
           onClick={() => { setMode('real'); setSelectedEntry(null) }}
         >
-          我的紀錄
+          My Sessions
         </button>
         <button
           className={`dash-mode-btn ${mode === 'demo' ? 'active' : ''}`}
           onClick={() => { setMode('demo'); setSelectedEntry(null) }}
         >
-          示範資料
+          Demo Data
         </button>
         {mode === 'demo' && (
-          <span className="demo-label" role="status">示範資料，非真實分析</span>
+          <span className="demo-label" role="status">Demo data — not real analysis</span>
         )}
       </div>
 
@@ -774,17 +779,17 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
       {isRealEmpty ? (
         <div className="dash-empty-state">
           <div className="dash-empty-icon">📖</div>
-          <h2 className="dash-empty-title">尚無閱讀紀錄</h2>
-          <p className="dash-empty-desc">完成第一場閱讀後，紀錄會出現在這裡。</p>
+          <h2 className="dash-empty-title">No Sessions Yet</h2>
+          <p className="dash-empty-desc">Your sessions will appear here after you complete your first one.</p>
           <div className="dash-empty-actions">
             <button className="btn btn-primary" onClick={onStartNewSession}>
-              開始新閱讀
+              New Session
             </button>
             <button
               className="btn btn-secondary btn-small"
               onClick={() => setMode('demo')}
             >
-              查看示範資料
+              View Demo Data
             </button>
           </div>
         </div>
@@ -799,29 +804,29 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
                   className={`dash-tab ${view === v ? 'active' : ''}`}
                   onClick={() => { setView(v); setSelectedEntry(null) }}
                 >
-                  {v === 'day' ? '日' : v === 'week' ? '週' : '月'}
+                  {v === 'day' ? 'Day' : v === 'week' ? 'Week' : 'Month'}
                 </button>
               ))}
             </div>
             <div className="dash-nav">
-              <button className="btn-icon" onClick={() => navigate(-1)} aria-label="上一個">◀</button>
+              <button className="btn-icon" onClick={() => navigate(-1)} aria-label="Previous">◀</button>
               <span className="dash-period-label">{periodLabel}</span>
-              <button className="btn-icon" onClick={() => navigate(1)} aria-label="下一個">▶</button>
-              <button className="btn btn-ghost btn-small" onClick={goToday}>今天</button>
+              <button className="btn-icon" onClick={() => navigate(1)} aria-label="Next">▶</button>
+              <button className="btn btn-ghost btn-small" onClick={goToday}>Today</button>
             </div>
             <div className="dash-filter">
-              <label htmlFor="dash-cat-filter" className="sr-only">分類篩選</label>
+              <label htmlFor="dash-cat-filter" className="sr-only">Filter by Category</label>
               <select
                 id="dash-cat-filter"
                 className="dash-select"
                 value={categoryFilter}
                 onChange={e => { setCategoryFilter(e.target.value as CategoryFilter); setSelectedEntry(null) }}
               >
-                <option value="all">全部分類</option>
+                <option value="all">All Categories</option>
                 {CATEGORIES.map(c => (
                   <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
-                <option value="uncategorized">未分類</option>
+                <option value="uncategorized">Uncategorized</option>
               </select>
             </div>
           </div>

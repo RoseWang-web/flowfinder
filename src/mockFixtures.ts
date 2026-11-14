@@ -110,7 +110,7 @@ function buildMockEntries(): HistoryEntry[] {
     entry(
       makeSession({ daysAgo: 0, startOffsetMs: 9 * 3600_000, activeReadingMs: 35 * 60_000, durationMs: 36 * 60_000, endReason: 'manual', categoryId: 'web_reading', cameraEnabled: true }),
       85,
-      '閱讀期間大多保持正視螢幕，頭部偏轉次數少。',
+      'Mostly facing screen during reading, few head turns detected.',
     ),
     entry(
       makeSession({ daysAgo: 0, startOffsetMs: 14 * 3600_000, activeReadingMs: 20 * 60_000, durationMs: 21 * 60_000, endReason: 'manual', categoryId: 'study_notes' }),
@@ -121,21 +121,21 @@ function buildMockEntries(): HistoryEntry[] {
     entry(
       makeSession({ daysAgo: 1, startOffsetMs: 10 * 3600_000, activeReadingMs: 30 * 60_000, durationMs: 32 * 60_000, endReason: 'time_up', categoryId: 'web_reading', cameraEnabled: true }),
       72,
-      '中途有數次抬頭，整體仍在目標範圍。',
+      'A few head lifts mid-session; overall still within target range.',
     ),
 
     // ── 2 days ago ──
     entry(
       makeSession({ daysAgo: 2, startOffsetMs: 9 * 3600_000, activeReadingMs: 15 * 60_000, durationMs: 16 * 60_000, endReason: 'manual', categoryId: 'web_reading' }),
       55,
-      '視線離開螢幕的頻率偏高。',
+      'Gaze left the screen more frequently than usual.',
     ),
 
     // ── 3 days ago: score = 0 (valid) ──
     entry(
       makeSession({ daysAgo: 3, startOffsetMs: 20 * 3600_000 + 30 * 60_000, activeReadingMs: 10 * 60_000, durationMs: 11 * 60_000, endReason: 'manual', categoryId: 'study_notes' }),
       0,
-      '本次分析結果接近下限，建議確認環境光線與攝影機角度。',
+      'Result near the lower bound — check lighting and camera angle.',
     ),
 
     // ── 4 days ago: zero activeReadingMs (not eligible for average) ──
@@ -148,14 +148,14 @@ function buildMockEntries(): HistoryEntry[] {
     entry(
       makeSession({ daysAgo: 5, startOffsetMs: 8 * 3600_000 + 45 * 60_000, activeReadingMs: 18 * 60_000, durationMs: 20 * 60_000, endReason: 'time_up', categoryId: 'web_reading', cameraEnabled: true }),
       92,
-      '本次專注度優秀，幾乎無分心行為偵測。',
+      'Excellent focus this session — almost no distraction detected.',
     ),
 
     // ── 5 days ago (cross-midnight): starts 23:00, ends 00:30 next calendar day ──
     entry(
       makeSession({ daysAgo: 5, startOffsetMs: 23 * 3600_000, activeReadingMs: 60 * 60_000, durationMs: 90 * 60_000, endReason: 'manual', categoryId: 'study_notes', cameraEnabled: true }),
       68,
-      '跨夜閱讀，後段因光線不足偵測品質下降。',
+      'Cross-midnight session; detection quality dropped in the second half due to low lighting.',
     ),
 
     // ── 7 days ago: interrupted session (not eligible for average) ──
@@ -168,28 +168,28 @@ function buildMockEntries(): HistoryEntry[] {
     entry(
       makeSession({ daysAgo: 10, startOffsetMs: 9 * 3600_000, activeReadingMs: 25 * 60_000, durationMs: 26 * 60_000, endReason: 'manual', skipTaskSettings: true }),
       45,
-      '無類別標記，分析結果僅供參考。',
+      'No category tag; analysis results are for reference only.',
     ),
 
     // ── 14 days ago ──
     entry(
       makeSession({ daysAgo: 14, startOffsetMs: 10 * 3600_000, activeReadingMs: 25 * 60_000, durationMs: 27 * 60_000, endReason: 'manual', categoryId: 'web_reading', cameraEnabled: true }),
       38,
-      '本次結果偏低，可能受到背景雜訊影響。',
+      'Score on the lower side — may have been affected by background noise.',
     ),
 
     // ── 28 days ago (last month) ──
     entry(
       makeSession({ daysAgo: 28, startOffsetMs: 14 * 3600_000, activeReadingMs: 40 * 60_000, durationMs: 42 * 60_000, endReason: 'time_up', categoryId: 'study_notes', cameraEnabled: true }),
       78,
-      '學習筆記場次，表現穩定。',
+      'Study notes session, steady performance.',
     ),
 
     // ── 35 days ago (previous month) ──
     entry(
       makeSession({ daysAgo: 35, startOffsetMs: 10 * 3600_000, activeReadingMs: 20 * 60_000, durationMs: 22 * 60_000, endReason: 'manual', categoryId: 'web_reading', cameraEnabled: true }),
       15,
-      '環境偵測異常，分數僅供參考。',
+      'Detection anomaly detected in environment; score is for reference only.',
     ),
   ]
 }

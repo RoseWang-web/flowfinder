@@ -197,7 +197,7 @@ export function useCamera(options: UseCameraOptions): CameraState {
     if (!adapter.isSupported()) {
       const err: CameraError = {
         kind: 'not_secure',
-        message: '需要在 HTTPS 或 localhost 環境下才能使用攝影機。',
+        message: 'Camera requires a secure context (HTTPS or localhost).',
       }
       setAndSyncCameraStatus('error')
       setCameraError(err)
@@ -251,7 +251,7 @@ export function useCamera(options: UseCameraOptions): CameraState {
           stream.getTracks().forEach(t => t.stop())
           return
         }
-        setLandmarkerFallbackMsg('進階臉部觀察無法啟用，目前使用基本臉部偵測。')
+        setLandmarkerFallbackMsg('Advanced face observation unavailable — using basic face detection.')
       }
     }
 

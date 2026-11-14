@@ -46,22 +46,21 @@ describe('Result page with timeline', () => {
   it('renders timeline section heading for completed session', () => {
     saveSession(makeCompletedSession())
     render(<App />)
-    expect(screen.getByText('時間軸')).toBeDefined()
+    expect(screen.getByText('Timeline')).toBeDefined()
   })
 
-  it('shows 閱讀計時 and 本次經過時間 in timeline stats', () => {
+  it('shows Active Reading Time stat on the result page', () => {
     saveSession(makeCompletedSession())
     render(<App />)
-    expect(screen.getAllByText('閱讀計時').length).toBeGreaterThan(0)
-    expect(screen.getByText('本次經過時間')).toBeDefined()
+    expect(screen.getAllByText(/Active Reading Time/).length).toBeGreaterThan(0)
   })
 
   it('delete button clears result page and returns to consent screen', async () => {
     saveSession(makeCompletedSession())
     render(<App />)
-    const deleteBtn = screen.getByRole('button', { name: '刪除本次資料' })
+    const deleteBtn = screen.getByRole('button', { name: 'Delete Session Data' })
     await act(async () => { await userEvent.click(deleteBtn) })
-    expect(screen.getByText('眼動追蹤')).toBeDefined()
+    expect(screen.getByText('Eye Tracking')).toBeDefined()
     expect(localStorage.getItem('flowfinder_session_v2')).toBeNull()
   })
 
@@ -71,12 +70,12 @@ describe('Result page with timeline', () => {
       throw new Error('quota exceeded')
     })
     render(<App />)
-    const deleteBtn = screen.getByRole('button', { name: '刪除本次資料' })
+    const deleteBtn = screen.getByRole('button', { name: 'Delete Session Data' })
     await act(async () => { await userEvent.click(deleteBtn) })
     // Error banner visible
-    expect(screen.getByText(/無法刪除保存紀錄/)).toBeDefined()
+    expect(screen.getByText(/Could not delete saved session/)).toBeDefined()
     // Memory cleared — app is on idle page
-    expect(screen.getByText('眼動追蹤')).toBeDefined()
+    expect(screen.getByText('Eye Tracking')).toBeDefined()
   })
 
   it('result page renders no camera video element (stream is idle)', () => {
@@ -96,15 +95,15 @@ describe('Result page with timeline', () => {
     }
     saveSession(makeCompletedSession({ taskSettings }))
     render(<App />)
-    expect(screen.getByText('本次任務設定')).toBeDefined()
-    expect(screen.getByText('學習／筆記')).toBeDefined()
-    expect(screen.getByText('本階段僅保存設定，尚未套用行為回顧規則。')).toBeDefined()
+    expect(screen.getByText('Task Settings')).toBeDefined()
+    expect(screen.getByText('Study / Notes')).toBeDefined()
+    expect(screen.getByText('Settings are saved for event review. Behavioral rules are not yet applied to scoring.')).toBeDefined()
   })
 
-  it('result page shows "此紀錄未保存任務設定" for session without taskSettings', () => {
+  it('result page shows "No task settings saved" for session without taskSettings', () => {
     saveSession(makeCompletedSession())
     render(<App />)
-    expect(screen.getByText('此紀錄未保存任務設定。')).toBeDefined()
+    expect(screen.getByText('No task settings saved for this session.')).toBeDefined()
   })
 
   it('session with corrupt taskSettings still loads and shows timeline', () => {
@@ -116,14 +115,14 @@ describe('Result page with timeline', () => {
     localStorage.setItem('flowfinder_session_v2', JSON.stringify(corruptSession))
     render(<App />)
     // Timeline still renders (session core is intact)
-    expect(screen.getByText('時間軸')).toBeDefined()
+    expect(screen.getByText('Timeline')).toBeDefined()
     // Task settings treated as unavailable
-    expect(screen.getByText('此紀錄未保存任務設定。')).toBeDefined()
+    expect(screen.getByText('No task settings saved for this session.')).toBeDefined()
   })
 
   it('idle page shows task category selector', () => {
     render(<App />)
-    expect(screen.getByText('本次任務設定')).toBeDefined()
+    expect(screen.getByText('Task Setup')).toBeDefined()
     expect(screen.getByRole('combobox')).toBeDefined()
   })
 
@@ -155,22 +154,22 @@ describe('Result page with timeline', () => {
       events,
     }))
     render(<App />)
-    expect(screen.getByText('眼動追蹤')).toBeDefined()
-    expect(screen.getByText('專注度')).toBeDefined()
-    expect(screen.getByText('專注度趨勢')).toBeDefined()
-    expect(screen.getByText('回報前後對照')).toBeDefined()
+    expect(screen.getByText('Eye Tracking')).toBeDefined()
+    expect(screen.getByText('Focus')).toBeDefined()
+    expect(screen.getByText('Focus trend')).toBeDefined()
+    expect(screen.getByText('Check-In Comparison')).toBeDefined()
     // 15 windows in the 30 s before the prompt, focus = 1 − 0.5
-    expect(screen.getByText('（15 個窗口）')).toBeDefined()
+    expect(screen.getByText('(15 windows)')).toBeDefined()
     expect(screen.getAllByText('0.50').length).toBe(2)
-    expect(screen.getAllByRole('button', { name: /^專注度，/ }).length).toBeGreaterThan(30)
-    expect(screen.getByText('下載本次資料（JSON）')).toBeDefined()
+    expect(screen.getAllByRole('button', { name: /^Focus, / }).length).toBeGreaterThan(30)
+    expect(screen.getByText('Download Session Data (JSON)')).toBeDefined()
     // attention_score events are summarised, not listed one by one
-    expect(screen.queryAllByText('專注度估計').length).toBe(1)
+    expect(screen.queryAllByText('Attention Estimates').length).toBe(1)
   })
 
   it('non-gaze session: no attention band', () => {
     saveSession(makeCompletedSession())
     render(<App />)
-    expect(screen.queryByText('專注度趨勢')).toBeNull()
+    expect(screen.queryByText('Focus trend')).toBeNull()
   })
 })

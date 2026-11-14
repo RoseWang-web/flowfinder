@@ -43,11 +43,11 @@ export function scoreToColor(score: number | null): { bg: string; text: string; 
  */
 export function validateScoreInput(raw: string): number | string {
   const trimmed = raw.trim()
-  if (trimmed === '') return '請輸入分數'
+  if (trimmed === '') return 'Please enter a score'
   const n = Number(trimmed)
-  if (!isFinite(n) || isNaN(n)) return '請輸入有效數字'
-  if (!Number.isInteger(n)) return '分數必須為整數'
-  if (n < 0 || n > 100) return '分數必須介於 0 到 100 之間'
+  if (!isFinite(n) || isNaN(n)) return 'Please enter a valid number'
+  if (!Number.isInteger(n)) return 'Score must be a whole number'
+  if (n < 0 || n > 100) return 'Score must be between 0 and 100'
   return n
 }
 
@@ -252,7 +252,7 @@ export function filterByCategory(
 export interface PeriodSummary {
   count: number
   totalActiveMs: number
-  eligibleActiveMs: number  // ms from eligible sessions (for "計分時長")
+  eligibleActiveMs: number  // ms from eligible sessions (for "Scored Time")
   weightedAvg: number | null
 }
 
@@ -290,7 +290,7 @@ export function formatScore(score: number | null): string {
 }
 
 export function localTimeString(ts: number, tz = browserTz()): string {
-  return new Intl.DateTimeFormat('zh-TW', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: '2-digit',
     minute: '2-digit',
@@ -298,7 +298,7 @@ export function localTimeString(ts: number, tz = browserTz()): string {
 }
 
 export function localDateTimeString(ts: number, tz = browserTz()): string {
-  return new Intl.DateTimeFormat('zh-TW', {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     month: 'short',
     day: 'numeric',
@@ -308,7 +308,7 @@ export function localDateTimeString(ts: number, tz = browserTz()): string {
 }
 
 export function yearMonthLabel(year: number, month: number): string {
-  return new Intl.DateTimeFormat('zh-TW', { year: 'numeric', month: 'long' }).format(
+  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long' }).format(
     new Date(Date.UTC(year, month - 1, 1)),
   )
 }

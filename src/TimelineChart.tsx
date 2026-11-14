@@ -38,9 +38,9 @@ const ATT_COLOUR = {
 }
 
 const ATT_STATUS_LABEL: Record<AttentionPoint['status'], string> = {
-  ok: '有效估計',
-  warming_up: '暖機中',
-  low_quality: '視線訊號不足',
+  ok: 'Valid estimate',
+  warming_up: 'Warming up',
+  low_quality: 'Low gaze signal',
 }
 
 // ── Colour maps ───────────────────────────────────────────────────────────
@@ -75,23 +75,23 @@ const MARKER_COLOUR: Record<string, string> = {
 // ── Labels ────────────────────────────────────────────────────────────────
 
 const KIND_LABEL: Record<string, string> = {
-  reading:     '閱讀中',
-  paused:      '暫停',
-  checking_in: '回報中',
-  unknown:     '未知',
-  visible:     '可見',
-  hidden:      '隱藏',
-  detected:    '偵測到臉',
-  not_detected:'未偵測到臉',
-  unavailable: '觀察不可用',
-  no_camera:   '未使用攝影機',
+  reading:     'Reading',
+  paused:      'Paused',
+  checking_in: 'Check-in',
+  unknown:     'Unknown',
+  visible:     'Visible',
+  hidden:      'Hidden',
+  detected:    'Face detected',
+  not_detected:'No face',
+  unavailable: 'Unavailable',
+  no_camera:   'No camera',
 }
 
 const MARKER_LABEL: Record<string, string> = {
-  check_in_shown:    '回報提示',
-  check_in_answered: '回答回報',
-  check_in_skipped:  '略過回報',
-  scroll:            '捲動',
+  check_in_shown:    'Check-in shown',
+  check_in_answered: 'Check-in answered',
+  check_in_skipped:  'Check-in skipped',
+  scroll:            'Scroll',
 }
 
 // ── Selection types ───────────────────────────────────────────────────────
@@ -104,25 +104,25 @@ type Selection =
 // ── Legend ────────────────────────────────────────────────────────────────
 
 const LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' }> = [
-  { label: '閱讀中',       colour: '#3b82f6' },
-  { label: '暫停',         colour: '#f59e0b' },
-  { label: '回報中',       colour: '#8b5cf6' },
-  { label: '頁面可見',     colour: '#93c5fd' },
-  { label: '頁面隱藏',     colour: '#6b7280' },
-  { label: '偵測到臉',     colour: '#6ee7b7' },
-  { label: '未偵測到臉',   colour: '#94a3b8' },
-  { label: '觀察不可用',   colour: '#e5e7eb' },
-  { label: '回報提示',     colour: '#f59e0b', shape: 'diamond' },
-  { label: '回答回報',     colour: '#3b82f6', shape: 'diamond' },
-  { label: '略過回報',     colour: '#9ca3af', shape: 'diamond' },
-  { label: '捲動',         colour: '#cbd5e1', shape: 'line' },
+  { label: 'Reading',          colour: '#3b82f6' },
+  { label: 'Paused',           colour: '#f59e0b' },
+  { label: 'Check-in',         colour: '#8b5cf6' },
+  { label: 'Page visible',     colour: '#93c5fd' },
+  { label: 'Page hidden',      colour: '#6b7280' },
+  { label: 'Face detected',    colour: '#6ee7b7' },
+  { label: 'No face',          colour: '#94a3b8' },
+  { label: 'Unavailable',      colour: '#e5e7eb' },
+  { label: 'Check-in shown',   colour: '#f59e0b', shape: 'diamond' },
+  { label: 'Check-in answered',colour: '#3b82f6', shape: 'diamond' },
+  { label: 'Check-in skipped', colour: '#9ca3af', shape: 'diamond' },
+  { label: 'Scroll',           colour: '#cbd5e1', shape: 'line' },
 ]
 
 const GAZE_LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' | 'dot' }> = [
-  { label: '專注度趨勢',   colour: ATT_COLOUR.trend, shape: 'line' },
-  { label: '單一窗口',     colour: ATT_COLOUR.window, shape: 'dot' },
-  { label: '暖機中',       colour: ATT_COLOUR.warming_up },
-  { label: '視線訊號不足', colour: ATT_COLOUR.low_quality },
+  { label: 'Focus trend',      colour: ATT_COLOUR.trend, shape: 'line' },
+  { label: 'Single window',    colour: ATT_COLOUR.window, shape: 'dot' },
+  { label: 'Warming up',       colour: ATT_COLOUR.warming_up },
+  { label: 'Low gaze signal',  colour: ATT_COLOUR.low_quality },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -186,10 +186,10 @@ export function TimelineChart({ data }: Props) {
 
   // ── Track rows ─────────────────────────────────────────────────────────
   const tracks: Array<{ label: string; id: string; segs: TimeSegment[]; colorMap: Record<string, string> }> = [
-    { label: '閱讀狀態', id: 'session',    segs: data.sessionStatusTrack,   colorMap: SESSION_COLOUR },
-    { label: '頁面可見', id: 'visibility', segs: data.pageVisibilityTrack,  colorMap: VISIBILITY_COLOUR },
-    { label: '臉部偵測', id: 'face',       segs: data.faceObservationTrack, colorMap: FACE_COLOUR },
-    { label: '操作',     id: 'actions',    segs: [],                         colorMap: {} },
+    { label: 'Status',     id: 'session',    segs: data.sessionStatusTrack,   colorMap: SESSION_COLOUR },
+    { label: 'Visibility', id: 'visibility', segs: data.pageVisibilityTrack,  colorMap: VISIBILITY_COLOUR },
+    { label: 'Face',       id: 'face',       segs: data.faceObservationTrack, colorMap: FACE_COLOUR },
+    { label: 'Actions',    id: 'actions',    segs: [],                         colorMap: {} },
   ]
 
   return (
@@ -200,7 +200,7 @@ export function TimelineChart({ data }: Props) {
           width={SVG_W}
           height={svgH}
           role="img"
-          aria-label="閱讀 session 時間軸"
+          aria-label="Session timeline"
           style={{ display: 'block', userSelect: 'none' }}
         >
           <defs>
@@ -278,7 +278,7 @@ export function TimelineChart({ data }: Props) {
                       style={{ cursor: 'pointer', outline: 'none' }}
                       tabIndex={0}
                       role="button"
-                      aria-label={`${track.label}：${KIND_LABEL[seg.kind] ?? seg.kind}，${fmtMs(seg.startMs)}–${fmtMs(seg.endMs)}`}
+                      aria-label={`${track.label}: ${KIND_LABEL[seg.kind] ?? seg.kind}, ${fmtMs(seg.startMs)}–${fmtMs(seg.endMs)}`}
                       aria-pressed={isSelected}
                       onClick={() => selectSeg(track.id, seg)}
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSeg(track.id, seg) } }}
@@ -297,7 +297,7 @@ export function TimelineChart({ data }: Props) {
                       style={{ cursor: 'pointer', outline: 'none' }}
                       tabIndex={0}
                       role="button"
-                      aria-label={`${MARKER_LABEL[m.kind] ?? m.kind}，${fmtMs(m.ms)}${m.detail ? '，' + m.detail : ''}`}
+                      aria-label={`${MARKER_LABEL[m.kind] ?? m.kind}, ${fmtMs(m.ms)}${m.detail ? ', ' + m.detail : ''}`}
                       aria-pressed={isSelected}
                       onClick={() => selectMarker(m)}
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMarker(m) } }}
@@ -325,12 +325,12 @@ export function TimelineChart({ data }: Props) {
 
           {/* ── Attention band (eye-tracking mode) ── */}
           {hasGaze && (
-            <g aria-label="專注度">
+            <g aria-label="Focus score">
               <text x={LABEL_W - 6} y={ATT_Y + ATT_H / 2 + 4} textAnchor="end" fontSize={11} fill="#6b7280" fontWeight="600">
-                專注度
+                Focus
               </text>
-              <text x={LABEL_W - 6} y={ATT_Y + 10} textAnchor="end" fontSize={9} fill="#9ca3af">高</text>
-              <text x={LABEL_W - 6} y={ATT_Y + ATT_H - 2} textAnchor="end" fontSize={9} fill="#9ca3af">低</text>
+              <text x={LABEL_W - 6} y={ATT_Y + 10} textAnchor="end" fontSize={9} fill="#9ca3af">Hi</text>
+              <text x={LABEL_W - 6} y={ATT_Y + ATT_H - 2} textAnchor="end" fontSize={9} fill="#9ca3af">Lo</text>
               <rect x={LABEL_W} y={ATT_Y} width={TL_W} height={ATT_H} fill="#f9fafb" rx={3} />
               {ticks.map(ms => (
                 <line key={ms} x1={tx(ms)} y1={ATT_Y} x2={tx(ms)} y2={ATT_Y + ATT_H} stroke="#e5e7eb" strokeWidth={1} />
@@ -356,7 +356,7 @@ export function TimelineChart({ data }: Props) {
                   style={{ cursor: 'pointer' }}
                   tabIndex={0}
                   role="button"
-                  aria-label={`專注度：${ATT_STATUS_LABEL[p.status]}，${fmtMs(p.ms)}`}
+                  aria-label={`Focus: ${ATT_STATUS_LABEL[p.status]}, ${fmtMs(p.ms)}`}
                   onClick={() => selectAttention(p)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAttention(p) } }}
                 />
@@ -380,7 +380,7 @@ export function TimelineChart({ data }: Props) {
                     style={{ cursor: 'pointer', outline: 'none' }}
                     tabIndex={0}
                     role="button"
-                    aria-label={`專注度，${fmtMs(p.ms)}，分數 ${(p.score as number).toFixed(3)}`}
+                    aria-label={`Focus, ${fmtMs(p.ms)}, score ${(p.score as number).toFixed(3)}`}
                     aria-pressed={isSelected}
                     onClick={() => selectAttention(p)}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAttention(p) } }}
@@ -403,7 +403,7 @@ export function TimelineChart({ data }: Props) {
                 <span className="tl-detail-track">{trackLabel}</span>
                 <span className="tl-detail-kind">{KIND_LABEL[seg.kind] ?? seg.kind}</span>
                 <span className="tl-detail-time">{fmtMs(seg.startMs)} → {fmtMs(seg.endMs)}</span>
-                <span className="tl-detail-dur">持續 {fmtMs(seg.endMs - seg.startMs)}</span>
+                <span className="tl-detail-dur">Duration {fmtMs(seg.endMs - seg.startMs)}</span>
               </>
             )
           })()}
@@ -421,15 +421,15 @@ export function TimelineChart({ data }: Props) {
             const p = selection.point
             return (
               <>
-                <span className="tl-detail-track">專注度</span>
+                <span className="tl-detail-track">Focus</span>
                 <span className="tl-detail-time">{fmtMs(Math.max(p.ms - 10_000, 0))} → {fmtMs(p.ms)}</span>
                 <span className="tl-detail-kind">
                   {p.status === 'ok' && p.score !== null && p.trend !== null
-                    ? `分數 ${p.score.toFixed(3)}（趨勢 ${p.trend.toFixed(3)}）`
+                    ? `Score ${p.score.toFixed(3)} (trend ${p.trend.toFixed(3)})`
                     : ATT_STATUS_LABEL[p.status]}
                 </span>
                 {p.nLineReturns !== null && p.xProgress !== null && (
-                  <span className="tl-detail-dur">換行 {p.nLineReturns} 次・往右 {Math.round(p.xProgress)} px/s</span>
+                  <span className="tl-detail-dur">Line returns {p.nLineReturns} · rightward {Math.round(p.xProgress)} px/s</span>
                 )}
               </>
             )
@@ -437,13 +437,13 @@ export function TimelineChart({ data }: Props) {
           <button
             className="tl-detail-close"
             onClick={() => setSelection(null)}
-            aria-label="關閉詳情"
+            aria-label="Close detail"
           >✕</button>
         </div>
       )}
 
       {/* ── Legend ── */}
-      <div className="timeline-legend" aria-label="圖例">
+      <div className="timeline-legend" aria-label="Legend">
         {legend.map(item => (
           <span key={item.label} className="tl-legend-item">
             {item.shape === 'dot' ? (
@@ -465,13 +465,13 @@ export function TimelineChart({ data }: Props) {
       {/* ── Stat summary ── */}
       <div className="timeline-stats">
         <div className="tl-stat">
-          <span className="tl-stat-label">閱讀計時</span>
-          <span className="tl-stat-note">（不含暫停及回報時間）</span>
+          <span className="tl-stat-label">Active Reading Time</span>
+          <span className="tl-stat-note">(excludes pause &amp; check-in)</span>
           <span className="tl-stat-value">{fmtMs(data.activeReadingMs)}</span>
         </div>
         <div className="tl-stat">
-          <span className="tl-stat-label">本次經過時間</span>
-          <span className="tl-stat-note">（從開始到結束的掛鐘時間）</span>
+          <span className="tl-stat-label">Total Elapsed</span>
+          <span className="tl-stat-note">(wall clock from start to end)</span>
           <span className="tl-stat-value">{fmtMs(data.totalMs)}</span>
         </div>
       </div>

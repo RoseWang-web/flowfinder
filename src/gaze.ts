@@ -60,7 +60,7 @@ const FACE_MESH_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.163
 
 export function parseGazeError(err: unknown): CameraError {
   if (err instanceof Error && /fetch|load|wasm|import/i.test(err.message)) {
-    return { kind: 'model_load_failed', message: `眼動模型載入失敗：${err.message}` }
+    return { kind: 'model_load_failed', message: `Eye tracking model failed to load: ${err.message}` }
   }
   return parseCameraError(err)
 }

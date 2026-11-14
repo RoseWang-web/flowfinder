@@ -49,7 +49,7 @@ export function loadSession(): LoadResult {
         ok: false,
         error: {
           kind: 'invalid_structure',
-          message: '無法讀取上次紀錄，你仍可開始新的閱讀。',
+          message: 'Could not load previous session. You can still start a new one.',
           isLoadError: true,
         },
       }
@@ -60,7 +60,7 @@ export function loadSession(): LoadResult {
         ok: false,
         error: {
           kind: 'version_mismatch',
-          message: '無法讀取上次紀錄，你仍可開始新的閱讀。',
+          message: 'Could not load previous session. You can still start a new one.',
           isLoadError: true,
         },
       }
@@ -74,7 +74,7 @@ export function loadSession(): LoadResult {
         ok: false,
         error: {
           kind: 'invalid_structure',
-          message: '無法讀取上次紀錄，你仍可開始新的閱讀。',
+          message: 'Could not load previous session. You can still start a new one.',
           isLoadError: true,
         },
       }
@@ -89,7 +89,7 @@ export function loadSession(): LoadResult {
       ok: false,
       error: {
         kind: 'parse_error',
-        message: '無法讀取上次紀錄，你仍可開始新的閱讀。',
+        message: 'Could not load previous session. You can still start a new one.',
         isLoadError: true,
       },
     }
@@ -103,7 +103,7 @@ export function saveSession(session: Session): StorageError | null {
   } catch {
     return {
       kind: 'write_error',
-      message: '本次紀錄無法保存，重新整理後可能遺失。',
+      message: 'Session could not be saved. Data may be lost after a page refresh.',
       isLoadError: false,
     }
   }
@@ -116,7 +116,7 @@ export function clearSession(): StorageError | null {
   } catch {
     return {
       kind: 'write_error',
-      message: '無法刪除保存紀錄，但本次資料已從記憶體清除。',
+      message: 'Could not delete saved session, but data has been cleared from memory.',
       isLoadError: false,
     }
   }

@@ -80,7 +80,7 @@ export interface SessionEvent {
   eventType: EventType
   /** ms since session startedAt, INCLUDING pause time */
   elapsedMs: number
-  /** activeReadingMs (閱讀計時) at moment of event — does not include pause or check-in time */
+  /** activeReadingMs (active reading time) at moment of event — does not include pause or check-in time */
   activeReadingMs: number
   data?: Record<string, unknown>
 }
@@ -101,7 +101,7 @@ export interface Session {
   startedAt: number
   status: SessionStatus
   durationMs: number
-  /** 閱讀計時 — does not include pause, checking_in, or answer time */
+  /** Active reading time — does not include pause, checking_in, or answer time */
   activeReadingMs: number
   lastSavedAt: number
   endedAt: number | null
@@ -116,4 +116,6 @@ export interface Session {
   gaze?: GazeSessionInfo
   /** Immutable copy of task settings at session start. Absent in sessions from before this feature. */
   taskSettings?: SessionTaskSettings
+  /** Planned session duration in ms. 0 = unlimited (∞). Absent in old sessions — treat as 120_000. */
+  plannedDurationMs?: number
 }

@@ -305,6 +305,37 @@ describe('deletedIds blocking re-import', () => {
 
 // ── Helper: build a minimal raw entry for JSON fixture tests ─────────────────
 
+function rawSessionWith(sessionExtra: Record<string, unknown>) {
+  return {
+    session: {
+      schemaVersion: 2,
+      sessionId: 'raw-sess',
+      articleId: 'article-v1',
+      startedAt: Date.UTC(2026, 0, 15, 10, 0, 0),
+      status: 'completed',
+      durationMs: 1_800_000,
+      activeReadingMs: 1_500_000,
+      lastSavedAt: Date.UTC(2026, 0, 15, 10, 30, 0),
+      endedAt: Date.UTC(2026, 0, 15, 10, 30, 0),
+      endReason: 'manual',
+      checkIn: null,
+      cameraEnabled: false,
+      events: [],
+      ...sessionExtra,
+    },
+    analysis: {
+      sessionId: 'raw-sess',
+      status: 'ready',
+      totalScore: 70,
+      summary: null,
+      scoringVersion: '0.1.0',
+      source: 'real',
+      analyzedAt: 1_000,
+    },
+    entryVersion: 1,
+  }
+}
+
 function rawEntryWith(extra: Record<string, unknown>) {
   return {
     session: {
@@ -359,11 +390,11 @@ describe('updateManualOverride', () => {
 
   it('stores optional reason when provided', () => {
     upsertHistoryEntry(makeEntry('s1'))
-    updateManualOverride('s1', { score: 60, reason: '有感覺比較準', overriddenAt: 2000 })
+    updateManualOverride('s1', { score: 60, reason: 'Felt more accurate', overriddenAt: 2000 })
     const result = loadHistory()
     if (result.ok) {
       const e = result.data.entries.find(e => e.session.sessionId === 's1')!
-      expect(e.manualOverride?.reason).toBe('有感覺比較準')
+      expect(e.manualOverride?.reason).toBe('Felt more accurate')
     }
   })
 
@@ -526,6 +557,52 @@ describe('validateEntry with manualOverride', () => {
     const result = loadHistory()
     if (result.ok) {
       expect(result.data.entries[0].manualOverride?.score).toBe(0)
+    }
+  })
+})
+
+// ── plannedDurationMs backward compat ─────────────────────────────────────────
+
+describe('plannedDurationMs backward compat', () => {
+  it('defaults plannedDurationMs to 120_000 when field is absent from stored session', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawSessionWith({})],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.entries[0].session.plannedDurationMs).toBe(120_000)
+    }
+  })
+
+  it('preserves plannedDurationMs of 1_800_000 when present', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawSessionWith({ plannedDurationMs: 1_800_000 })],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.entries[0].session.plannedDurationMs).toBe(1_800_000)
+    }
+  })
+
+  it('preserves plannedDurationMs of 0 (unlimited) when present', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawSessionWith({ plannedDurationMs: 0 })],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.entries[0].session.plannedDurationMs).toBe(0)
     }
   })
 })

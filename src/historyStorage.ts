@@ -57,7 +57,14 @@ function validateEntry(raw: unknown): HistoryEntry | null {
   const s = sess as Record<string, unknown>
   if (typeof s.sessionId !== 'string' || typeof s.startedAt !== 'number') return null
 
-  const session = sess as Session
+  const rawPlanned = s.plannedDurationMs
+  const session: Session = {
+    ...(sess as Session),
+    plannedDurationMs:
+      typeof rawPlanned === 'number' && isFinite(rawPlanned) && rawPlanned >= 0
+        ? rawPlanned
+        : 120_000,
+  }
   const analysis: AnalysisResult =
     typeof obj.analysis === 'object' && obj.analysis !== null
       ? (obj.analysis as AnalysisResult)
@@ -93,14 +100,14 @@ export function loadHistory(): LoadHistoryResult {
 
     const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null) {
-      return { ok: false, error: { kind: 'invalid_structure', message: '歷史紀錄格式錯誤，將從空白開始。', isLoadError: true } }
+      return { ok: false, error: { kind: 'invalid_structure', message: 'History data is malformed — starting fresh.', isLoadError: true } }
     }
     const obj = parsed as Record<string, unknown>
     if (obj.schemaVersion !== HISTORY_SCHEMA_VERSION) {
-      return { ok: false, error: { kind: 'invalid_structure', message: '歷史紀錄版本不支援，將從空白開始。', isLoadError: true } }
+      return { ok: false, error: { kind: 'invalid_structure', message: 'History data version is not supported — starting fresh.', isLoadError: true } }
     }
     if (!Array.isArray(obj.entries)) {
-      return { ok: false, error: { kind: 'invalid_structure', message: '歷史紀錄格式錯誤，將從空白開始。', isLoadError: true } }
+      return { ok: false, error: { kind: 'invalid_structure', message: 'History data is malformed — starting fresh.', isLoadError: true } }
     }
 
     const entries: HistoryEntry[] = []
@@ -116,7 +123,7 @@ export function loadHistory(): LoadHistoryResult {
 
     return { ok: true, data: { schemaVersion: HISTORY_SCHEMA_VERSION, entries, deletedIds } }
   } catch {
-    return { ok: false, error: { kind: 'parse_error', message: '歷史紀錄無法解析，將從空白開始。', isLoadError: true } }
+    return { ok: false, error: { kind: 'parse_error', message: 'History data could not be parsed — starting fresh.', isLoadError: true } }
   }
 }
 
@@ -125,7 +132,7 @@ function writeHistory(data: HistoryData): HistoryStorageError | null {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(data))
     return null
   } catch {
-    return { kind: 'write_error', message: '歷史紀錄無法寫入，請確認儲存空間是否不足。', isLoadError: false }
+    return { kind: 'write_error', message: 'History data could not be written — storage may be full.', isLoadError: false }
   }
 }
 

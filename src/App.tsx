@@ -3,8 +3,8 @@ import { article } from './article'
 import {
   useSession,
   formatTime,
-  READING_DURATION_MS,
 } from './useSession'
+import { DurationPicker } from './DurationPicker'
 import { useGaze } from './useGaze'
 import { GazeCalibration } from './GazeCalibration'
 import modelJson from './model.json'
@@ -35,9 +35,9 @@ import './App.css'
 // ── Task rule definitions ────────────────────────────────────────────────
 
 const RULE_KEYS: Array<{ key: keyof TaskRules; label: string }> = [
-  { key: 'allowHeadDown', label: '允許低頭' },
-  { key: 'allowTabSwitch', label: '允許切換分頁' },
-  { key: 'allowWindowBlur', label: '允許視窗失焦' },
+  { key: 'allowHeadDown', label: 'Allow Head Down' },
+  { key: 'allowTabSwitch', label: 'Allow Tab Switch' },
+  { key: 'allowWindowBlur', label: 'Allow Window Blur' },
 ]
 
 // ── Utilities ────────────────────────────────────────────────────────────
@@ -47,44 +47,44 @@ function msToDisplay(ms: number): string {
 }
 
 function tsToTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function eventLabel(type: SessionEvent['eventType']): string {
   const map: Record<SessionEvent['eventType'], string> = {
-    session_start: '開始閱讀',
-    session_pause: '暫停',
-    session_resume: '繼續',
-    session_end: '結束',
-    page_visibility: '頁面可見性變更',
-    scroll: '捲動',
-    check_in_shown: '回報提示出現',
-    check_in_answered: '回報已回答',
-    check_in_skipped: '回報已略過',
-    session_interrupted: '已中斷（頁面重新整理）',
-    camera_started: '攝影機已啟動',
-    camera_stopped: '攝影機已停止',
-    camera_error: '攝影機錯誤',
-    face_detection_changed: '面部偵測變更',
-    attention_score: '專注度估計',
-    gaze_error: '眼動追蹤錯誤',
+    session_start: 'Session Started',
+    session_pause: 'Paused',
+    session_resume: 'Resumed',
+    session_end: 'Ended',
+    page_visibility: 'Page Visibility Changed',
+    scroll: 'Scroll',
+    check_in_shown: 'Check-in Shown',
+    check_in_answered: 'Check-in Answered',
+    check_in_skipped: 'Check-in Skipped',
+    session_interrupted: 'Interrupted (Page Reload)',
+    camera_started: 'Camera Started',
+    camera_stopped: 'Camera Stopped',
+    camera_error: 'Camera Error',
+    face_detection_changed: 'Face Detection Changed',
+    attention_score: 'Attention Score',
+    gaze_error: 'Eye Tracking Error',
   }
   return map[type] ?? type
 }
 
 const GAZE_QUALITY_LABEL: Record<GazeQuality, string> = {
-  good: '良好',
-  usable: '可用',
-  poor: '不足',
+  good: 'Good',
+  usable: 'Usable',
+  poor: 'Poor',
 }
 
 function checkInAnswerLabel(answer: CheckInAnswer | null): string {
   if (!answer) return '—'
   const map: Record<CheckInAnswer, string> = {
-    on_task: '是，在閱讀內容上',
-    partly: '部分是',
-    off_task: '否',
-    not_sure: '不確定',
+    on_task: 'Yes, focused',
+    partly: 'Partly',
+    off_task: 'No',
+    not_sure: 'Not sure',
   }
   return map[answer]
 }
@@ -111,11 +111,11 @@ function StatusBadge({ label, color }: { label: string; color: string }) {
 }
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  idle: { label: '未開始', color: '#6b7280' },
-  running: { label: '閱讀中', color: '#16a34a' },
-  paused: { label: '已暫停', color: '#d97706' },
-  checking_in: { label: '回報中', color: '#7c3aed' },
-  completed: { label: '已結束', color: '#6b7280' },
+  idle: { label: 'Idle', color: '#6b7280' },
+  running: { label: 'In Progress', color: '#16a34a' },
+  paused: { label: 'Paused', color: '#d97706' },
+  checking_in: { label: 'Checking In', color: '#7c3aed' },
+  completed: { label: 'Completed', color: '#6b7280' },
 }
 
 function CheckInDialog({
@@ -126,15 +126,15 @@ function CheckInDialog({
   onSkip: () => void
 }) {
   const options: { value: CheckInAnswer; label: string }[] = [
-    { value: 'on_task', label: '是' },
-    { value: 'partly', label: '部分是' },
-    { value: 'off_task', label: '否' },
-    { value: 'not_sure', label: '不確定' },
+    { value: 'on_task', label: 'Yes' },
+    { value: 'partly', label: 'Partly' },
+    { value: 'off_task', label: 'No' },
+    { value: 'not_sure', label: 'Not sure' },
   ]
   return (
     <div className="checkin-overlay">
       <div className="checkin-dialog" role="dialog" aria-modal="true">
-        <p className="checkin-question">提示出現前，你的注意力在閱讀內容上嗎？</p>
+        <p className="checkin-question">Was your attention on the reading before this prompt?</p>
         <div className="checkin-options">
           {options.map(o => (
             <button key={o.value} className="btn btn-checkin" onClick={() => onAnswer(o.value)}>
@@ -143,7 +143,7 @@ function CheckInDialog({
           ))}
         </div>
         <button className="btn btn-skip" onClick={onSkip}>
-          略過
+          Skip
         </button>
       </div>
     </div>
@@ -158,6 +158,7 @@ export default function App() {
   const {
     status,
     remainingMs,
+    plannedDurationMs,
     session,
     storageError,
     checkInPending,
@@ -173,6 +174,8 @@ export default function App() {
     recordEvent,
     articleRef,
   } = useSession()
+
+  const [pickedDurationMs, setPickedDurationMs] = useState(1_800_000)
 
   // Reading column, used to scale the line-return threshold
   const columnRef = useRef<HTMLElement | null>(null)
@@ -227,42 +230,42 @@ export default function App() {
   const latest = gaze.latest
   const gazeIndicator = gazeLive ? (
     <div className="gaze-indicator" aria-live="polite">
-      {gaze.gazeStatus === 'paused' ? '眼動追蹤已暫停'
-        : !latest ? '眼動追蹤中…'
-        : latest.status === 'warming_up' ? `暖機中 ${latest.windowsSeen}/${latest.windowsNeeded}`
-        : latest.status === 'low_quality' ? '視線訊號不足'
-        : '眼動追蹤中'}
+      {gaze.gazeStatus === 'paused' ? 'Eye tracking paused'
+        : !latest ? 'Tracking…'
+        : latest.status === 'warming_up' ? `Warming up ${latest.windowsSeen}/${latest.windowsNeeded}`
+        : latest.status === 'low_quality' ? 'Low gaze signal'
+        : 'Eye tracking active'}
     </div>
   ) : null
 
   const gazeDevRows = (
     <>
       <div className="dev-row">
-        <span className="dev-label">眼動狀態</span>
-        <span className="dev-value">{gaze.gazeStatus}{gaze.usedSavedBaseline ? '（沿用基準）' : ''}</span>
+        <span className="dev-label">Gaze Status</span>
+        <span className="dev-value">{gaze.gazeStatus}{gaze.usedSavedBaseline ? ' (saved baseline)' : ''}</span>
       </div>
       <div className="dev-row">
-        <span className="dev-label">估計狀態</span>
+        <span className="dev-label">Estimator</span>
         <span className="dev-value">{latest?.status ?? '—'}</span>
       </div>
       <div className="dev-row dev-row-mono">
-        <span className="dev-label">換行 / 速度</span>
+        <span className="dev-label">Line returns / Progress</span>
         <span className="dev-value">
           {latest ? `${latest.features.nLineReturns} / ${Math.round(latest.features.xProgress)} px/s` : '—'}
         </span>
       </div>
       <div className="dev-row dev-row-mono">
-        <span className="dev-label">遺失比例</span>
+        <span className="dev-label">Miss rate</span>
         <span className="dev-value">{latest ? `${Math.round(latest.features.missingRatio * 100)}%` : '—'}</span>
       </div>
       <div className="dev-row dev-row-mono">
-        <span className="dev-label">分數 / 趨勢</span>
+        <span className="dev-label">Score / Trend</span>
         <span className="dev-value">
           {latest?.status === 'ok' ? `${latest.score.toFixed(3)} / ${latest.trend.toFixed(3)}` : '—'}
         </span>
       </div>
       <label className="dev-row">
-        <span className="dev-label">顯示視線點</span>
+        <span className="dev-label">Show gaze dot</span>
         <input
           type="checkbox"
           checked={gazeDotVisible}
@@ -281,10 +284,10 @@ export default function App() {
     const isInterrupted = session.endReason === 'interrupted'
     const endReasonLabel =
       session.endReason === 'time_up'
-        ? '時間到'
+        ? "Time's Up"
         : session.endReason === 'manual'
-          ? '提前結束'
-          : '已中斷'
+          ? 'Ended Early'
+          : 'Interrupted'
 
     const checkIn = session.checkIn
     const checkInNeverShown = !checkIn
@@ -324,67 +327,67 @@ export default function App() {
             {isInterrupted ? '!' : '✓'}
           </div>
           <h2 className="result-title">
-            {isInterrupted ? '閱讀已中斷' : '閱讀結束'}
+            {isInterrupted ? 'Session Interrupted' : 'Session Complete'}
           </h2>
           {isInterrupted && (
             <p className="result-note">
-              頁面在閱讀途中重新整理，以下為最後保存的紀錄（截至{' '}
-              {tsToTime(session.endedAt ?? session.lastSavedAt)}）。
+              The page was refreshed mid-session. Last saved state (as of{' '}
+              {tsToTime(session.endedAt ?? session.lastSavedAt)}).
             </p>
           )}
 
           <div className="result-stats">
             <div className="stat-row">
               <span className="stat-label">
-                閱讀計時
-                <span className="stat-label-note">（不含暫停及回報時間）</span>
+                Active Reading Time
+                <span className="stat-label-note">(excludes pause &amp; check-in)</span>
               </span>
               <span className="stat-value">{activeDisplay}</span>
             </div>
             <div className="stat-row">
-              <span className="stat-label">結束原因</span>
+              <span className="stat-label">End Reason</span>
               <span className="stat-value">{endReasonLabel}</span>
             </div>
             <div className="stat-row">
-              <span className="stat-label">開始時間</span>
+              <span className="stat-label">Start Time</span>
               <span className="stat-value">{tsToTime(session.startedAt)}</span>
             </div>
           </div>
 
           {/* Check-in section */}
           <div className="result-section">
-            <h3 className="result-section-title">中途回報</h3>
+            <h3 className="result-section-title">Mid-Session Check-In</h3>
             {checkInNeverShown ? (
-              <p className="result-note">尚未出現回報提示（提前結束或中斷）。</p>
+              <p className="result-note">No check-in shown (ended early or interrupted).</p>
             ) : (
               <div className="result-stats">
                 <div className="stat-row">
-                  <span className="stat-label">提示出現時間</span>
+                  <span className="stat-label">Prompt Time</span>
                   <span className="stat-value">{tsToTime(checkIn.shownAt)}</span>
                 </div>
                 <div className="stat-row">
-                  <span className="stat-label">提示時閱讀計時</span>
+                  <span className="stat-label">Active Time at Prompt</span>
                   <span className="stat-value">{msToDisplay(checkIn.shownActiveReadingMs)}</span>
                 </div>
                 {checkIn.answer ? (
                   <>
                     <div className="stat-row">
-                      <span className="stat-label">回答</span>
+                      <span className="stat-label">Answer</span>
                       <span className="stat-value">{checkInAnswerLabel(checkIn.answer)}</span>
                     </div>
                     <div className="stat-row">
-                      <span className="stat-label">回答時間</span>
+                      <span className="stat-label">Answered At</span>
                       <span className="stat-value">{tsToTime(checkIn.answeredAt!)}</span>
                     </div>
                   </>
                 ) : checkIn.skipped ? (
                   <div className="stat-row">
-                    <span className="stat-label">已略過</span>
+                    <span className="stat-label">Skipped</span>
                     <span className="stat-value">—</span>
                   </div>
                 ) : (
                   <div className="stat-row">
-                    <span className="stat-label">未回答</span>
+                    <span className="stat-label">Not Answered</span>
                     <span className="stat-value">—</span>
                   </div>
                 )}
@@ -395,16 +398,16 @@ export default function App() {
           {/* Eye-tracking section */}
           {session.gazeEnabled && (
             <div className="result-section">
-              <h3 className="result-section-title">眼動追蹤</h3>
+              <h3 className="result-section-title">Eye Tracking</h3>
               <div className="result-stats">
                 {session.gaze && (
                   <>
                     <div className="stat-row">
-                      <span className="stat-label">校準品質</span>
+                      <span className="stat-label">Calibration Quality</span>
                       <span className="stat-value">{GAZE_QUALITY_LABEL[session.gaze.calibration.quality]}</span>
                     </div>
                     <div className="stat-row">
-                      <span className="stat-label">平均偏差／抖動</span>
+                      <span className="stat-label">Avg Accuracy / Precision</span>
                       <span className="stat-value">
                         {session.gaze.calibration.accuracyPx === null ? '—' : Math.round(session.gaze.calibration.accuracyPx)}
                         {' / '}
@@ -414,8 +417,8 @@ export default function App() {
                   </>
                 )}
                 <div className="stat-row">
-                  <span className="stat-label">專注度估計</span>
-                  <span className="stat-value">共 {attentionEvents.length} 筆，有效 {attentionScored} 筆</span>
+                  <span className="stat-label">Attention Estimates</span>
+                  <span className="stat-value">{attentionEvents.length} total, {attentionScored} scored</span>
                 </div>
               </div>
               {timelineData.checkInAttention && (() => {
@@ -423,21 +426,21 @@ export default function App() {
                 const focus = (v: number | null) => (v === null ? '—' : (1 - v).toFixed(2))
                 return (
                   <>
-                    <h4 className="result-subtitle">回報前後對照</h4>
+                    <h4 className="result-subtitle">Check-In Comparison</h4>
                     <div className="result-stats">
                       <div className="stat-row">
-                        <span className="stat-label">你的回答</span>
+                        <span className="stat-label">Your Answer</span>
                         <span className="stat-value">{checkInAnswerLabel(c.answer as CheckInAnswer | null)}</span>
                       </div>
                       <div className="stat-row">
                         <span className="stat-label">
-                          回報前 30 秒的專注度
-                          <span className="stat-label-note">（{c.nBefore} 個窗口）</span>
+                          Attention in 30s before check-in
+                          <span className="stat-label-note">({c.nBefore} windows)</span>
                         </span>
                         <span className="stat-value">{focus(c.scoreBefore)}</span>
                       </div>
                       <div className="stat-row">
-                        <span className="stat-label">整段平均專注度</span>
+                        <span className="stat-label">Full session avg</span>
                         <span className="stat-value">{focus(c.sessionMean)}</span>
                       </div>
                     </div>
@@ -445,22 +448,22 @@ export default function App() {
                 )
               })()}
               <p className="result-note">
-                專注度為相對指標（1 − 分心分數），只適合和自己比較；單次回報無法驗證準確度，累積多次紀錄才能評估。
+                Focus score is a relative measure (1 − distraction score) — best compared against your own baseline. Single sessions cannot validate accuracy; use trends across multiple sessions.
               </p>
               <button className="btn btn-ghost btn-small" onClick={() => downloadSession(session)}>
-                下載本次資料（JSON）
+                Download Session Data (JSON)
               </button>
             </div>
           )}
 
           {/* Task settings section */}
           <div className="result-section">
-            <h3 className="result-section-title">本次任務設定</h3>
+            <h3 className="result-section-title">Task Settings</h3>
             {session.taskSettings ? (
               <>
                 <div className="result-stats">
                   <div className="stat-row">
-                    <span className="stat-label">分類</span>
+                    <span className="stat-label">Category</span>
                     <span className="stat-value">
                       {CATEGORIES.find(c => c.id === session.taskSettings!.categoryId)?.label
                         ?? session.taskSettings.categoryId}
@@ -469,26 +472,26 @@ export default function App() {
                   {RULE_KEYS.map(({ key, label }) => (
                     <div key={key} className="stat-row">
                       <span className="stat-label">{label}</span>
-                      <span className="stat-value">{session.taskSettings!.rules[key] ? '是' : '否'}</span>
+                      <span className="stat-value">{session.taskSettings!.rules[key] ? 'Yes' : 'No'}</span>
                     </div>
                   ))}
                 </div>
-                <p className="result-note">本階段僅保存設定，尚未套用行為回顧規則。</p>
+                <p className="result-note">Settings are saved for event review. Behavioral rules are not yet applied to scoring.</p>
               </>
             ) : (
-              <p className="result-note">此紀錄未保存任務設定。</p>
+              <p className="result-note">No task settings saved for this session.</p>
             )}
           </div>
 
           {/* Timeline chart */}
           <div className="result-section result-section-wide">
-            <h3 className="result-section-title">時間軸</h3>
+            <h3 className="result-section-title">Timeline</h3>
             <TimelineChart data={timelineData} />
           </div>
 
           {/* Event log */}
           <div className="result-section">
-            <h3 className="result-section-title">事件紀錄</h3>
+            <h3 className="result-section-title">Event Log</h3>
             <div className="event-list">
               {allDisplayEvents.map(e => (
                 <div key={e.id} className="event-row">
@@ -498,20 +501,20 @@ export default function App() {
                   <span className="event-name">{eventLabel(e.eventType)}</span>
                   {e.eventType === 'page_visibility' && (
                     <span className="event-detail">
-                      {e.data?.visible ? '可見' : '隱藏'}
+                      {e.data?.visible ? 'Visible' : 'Hidden'}
                     </span>
                   )}
                   {e.eventType === 'scroll' && e.data?.count !== undefined && (
-                    <span className="event-detail">共 {String(e.data.count)} 次</span>
+                    <span className="event-detail">{String(e.data.count)} scrolls</span>
                   )}
                   {e.eventType === 'check_in_answered' && (
                     <span className="event-detail">{checkInAnswerLabel(e.data?.answer as CheckInAnswer | null)}</span>
                   )}
                   {e.eventType === 'face_detection_changed' && e.data?.status != null && (
                     <span className="event-detail">
-                      {e.data.status === 'detected' ? '偵測到人臉'
-                        : e.data.status === 'not_detected' ? '未偵測到人臉'
-                        : '不可用'}
+                      {e.data.status === 'detected' ? 'Face Detected'
+                        : e.data.status === 'not_detected' ? 'No Face'
+                        : 'Unavailable'}
                     </span>
                   )}
                   {e.eventType === 'camera_stopped' && e.data?.reason != null && (
@@ -527,17 +530,17 @@ export default function App() {
 
           <div className="result-actions">
             <button className="btn btn-primary" onClick={() => { resetToIdle(); }}>
-              開始新一次
+              New Session
             </button>
             <button className="btn btn-secondary btn-small" onClick={() => setAppView('dashboard')}>
-              查看紀錄
+              View History
             </button>
             <button className="btn btn-ghost btn-small" onClick={deleteData}>
-              刪除本次資料
+              Delete Session Data
             </button>
-            <p className="privacy-note">（個人偏好設定不受影響）</p>
+            <p className="privacy-note">(Personal preferences are not affected)</p>
           </div>
-          <p className="privacy-note">資料僅保存在目前瀏覽器，不保存影像。</p>
+          <p className="privacy-note">Data is stored locally in this browser. No video is saved.</p>
         </div>
       </div>
     )
@@ -560,10 +563,11 @@ export default function App() {
         gazeEnabled: true,
         gaze: { calibration: summary, modelCvRocAuc: modelJson.training.cvRocAuc },
         taskSettings: buildSessionSettings(),
+        plannedDurationMs: pickedDurationMs,
       })
     }
     const handleNoGazeStart = () => {
-      start({ cameraEnabled: false, taskSettings: buildSessionSettings() })
+      start({ cameraEnabled: false, taskSettings: buildSessionSettings(), plannedDurationMs: pickedDurationMs })
     }
 
     return (
@@ -572,7 +576,7 @@ export default function App() {
         {gaze.gazeStatus === 'starting' && (
           <div className="gaze-overlay" role="status">
             <div className="gaze-card">
-              <p className="gaze-text">正在開啟攝影機並載入眼動模型…（第一次可能需要數十秒）</p>
+              <p className="gaze-text">Opening camera and loading eye tracking model… (first run may take a moment)</p>
             </div>
           </div>
         )}
@@ -587,17 +591,19 @@ export default function App() {
           <div className="header-top">
             <div className="project-info">
               <h1 className="project-name">flowfinder</h1>
-              <p className="project-desc">閱讀觀察工具</p>
+              <p className="project-desc">Focus Observer</p>
             </div>
             <div className="session-panel">
-              <StatusBadge label="未開始" color="#6b7280" />
-              <div className="timer-display">{formatTime(READING_DURATION_MS / 1000)}</div>
+              <StatusBadge label="Ready" color="#6b7280" />
+              <div className="timer-display">
+                {pickedDurationMs === 0 ? '∞' : formatTime(pickedDurationMs / 1000)}
+              </div>
               <button className="btn btn-ghost btn-small" onClick={() => setAppView('dashboard')}>
-                查看紀錄
+                History
               </button>
               {hasStoredData && (
                 <button className="btn btn-ghost btn-small" onClick={deleteData}>
-                  刪除資料
+                  Delete Data
                 </button>
               )}
             </div>
@@ -611,12 +617,17 @@ export default function App() {
             {/* Task setup section */}
             <div className="task-setup">
               <div>
-                <h3 className="task-setup-title">本次任務設定</h3>
-                <p className="task-setup-note">設定用於後續事件回顧；不會封鎖操作，也不代表已確認專注或分心。</p>
+                <h3 className="task-setup-title">Task Setup</h3>
+                <p className="task-setup-note">Settings are saved for event review. They don't block actions or confirm focus/distraction.</p>
+              </div>
+
+              <div className="task-duration-row">
+                <label className="task-label">Session Duration</label>
+                <DurationPicker value={pickedDurationMs} onChange={setPickedDurationMs} />
               </div>
 
               <div className="task-category-row">
-                <label className="task-label" htmlFor="task-category">任務分類</label>
+                <label className="task-label" htmlFor="task-category">Task Category</label>
                 <select
                   id="task-category"
                   className="task-select"
@@ -632,7 +643,7 @@ export default function App() {
                     <option key={c.id} value={c.id}>{c.label}</option>
                   ))}
                 </select>
-                <span className="task-category-hint">切換分類將丟棄未儲存的修改</span>
+                <span className="task-category-hint">Switching categories will discard unsaved changes</span>
               </div>
 
               <div className="task-toggle-list">
@@ -658,10 +669,10 @@ export default function App() {
                   onClick={() => {
                     const err = saveTaskPreferences(selectedCategory, draft)
                     if (err) setPrefMsg({ type: 'error', text: err.message })
-                    else setPrefMsg({ type: 'success', text: '已儲存此分類的個人預設。' })
+                    else setPrefMsg({ type: 'success', text: 'Default saved for this category.' })
                   }}
                 >
-                  儲存為個人預設
+                  Save as default
                 </button>
                 <button
                   className="btn btn-ghost btn-small"
@@ -669,11 +680,11 @@ export default function App() {
                     const sysDefault = getDefaultRules(selectedCategory)
                     const err = clearTaskPreferences(selectedCategory)
                     setDraft(sysDefault)
-                    if (err) setPrefMsg({ type: 'error', text: `草稿已恢復系統預設，但${err.message}` })
-                    else setPrefMsg({ type: 'success', text: '已恢復系統預設。' })
+                    if (err) setPrefMsg({ type: 'error', text: `Settings reset to defaults, but ${err.message}` })
+                    else setPrefMsg({ type: 'success', text: 'Reset to system defaults.' })
                   }}
                 >
-                  恢復系統預設
+                  Reset to default
                 </button>
               </div>
 
@@ -686,11 +697,11 @@ export default function App() {
 
             {/* Eye-tracking section */}
             <div className="camera-consent gaze-consent">
-              <p className="camera-consent-title">眼動追蹤</p>
+              <p className="camera-consent-title">Eye Tracking</p>
               <p className="camera-consent-desc">
-                用攝影機估計視線位置，根據換行頻率與閱讀速度估計專注度。開始前需要約 1 分鐘校準。
-                影像只在瀏覽器中處理，不保存影像；僅保存估計數值。
-                {selectedCategory !== 'web_reading' && ' 此模式為網頁閱讀設計，其他任務分類的估計可能不準。'}
+                Estimates gaze position via your camera to measure focus from reading patterns. Requires ~1 min of calibration.
+                Video is processed locally and never saved. Only estimated scores are stored.
+                {selectedCategory !== 'web_reading' && ' This mode is optimized for web reading; accuracy may vary for other task types.'}
               </p>
               <div className="camera-consent-actions">
                 <button
@@ -698,10 +709,10 @@ export default function App() {
                   onClick={handleStartGaze}
                   disabled={gaze.gazeStatus === 'starting' || gaze.gazeStatus === 'calibrating'}
                 >
-                  啟用眼動追蹤
+                  Enable Eye Tracking
                 </button>
                 <button className="btn btn-secondary" onClick={handleNoGazeStart}>
-                  不使用眼動追蹤繼續
+                  Continue without Eye Tracking
                 </button>
               </div>
               {gaze.gazeError && (
@@ -722,7 +733,10 @@ export default function App() {
 
   // ── Reading / paused / checking_in ───────────────────────────────────
   const statusMeta = STATUS_META[status] ?? STATUS_META.running
-  const progressPct = ((READING_DURATION_MS - remainingMs) / READING_DURATION_MS) * 100
+  const isUnlimitedSession = plannedDurationMs === 0
+  const progressPct = isUnlimitedSession
+    ? 0
+    : Math.min(100, ((plannedDurationMs - remainingMs) / plannedDurationMs) * 100)
 
   return (
     <div className="page reading-page">
@@ -734,41 +748,47 @@ export default function App() {
         <div className="header-top">
           <div className="project-info">
             <h1 className="project-name">flowfinder</h1>
-            <p className="project-desc">閱讀觀察工具</p>
+            <p className="project-desc">Focus Observer</p>
           </div>
           <div className="session-panel">
             <StatusBadge label={statusMeta.label} color={statusMeta.color} />
-            <div className="timer-display">{formatTime(Math.ceil(remainingMs / 1000))}</div>
-            <div className="progress-bar-wrap">
-              <div
-                className="progress-bar-fill"
-                style={{ width: `${progressPct}%` }}
-              />
+            <div className="timer-display">
+              {isUnlimitedSession
+                ? formatTime(Math.floor(remainingMs / 1000))
+                : formatTime(Math.ceil(remainingMs / 1000))}
             </div>
+            {!isUnlimitedSession && (
+              <div className="progress-bar-wrap">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            )}
             {gazeIndicator}
             <div className="controls">
               {status === 'running' && (
                 <>
                   <button className="btn btn-secondary" onClick={pause} disabled={checkInPending}>
-                    暫停
+                    Pause
                   </button>
                   <button className="btn btn-danger" onClick={finish} disabled={checkInPending}>
-                    提前結束
+                    End Session
                   </button>
                 </>
               )}
               {status === 'paused' && (
                 <>
                   <button className="btn btn-primary" onClick={resume} disabled={checkInPending}>
-                    繼續
+                    Resume
                   </button>
                   <button className="btn btn-danger" onClick={finish} disabled={checkInPending}>
-                    提前結束
+                    End Session
                   </button>
                 </>
               )}
               {status === 'checking_in' && (
-                <span className="status-hint">請先回答回報提示</span>
+                <span className="status-hint">Please answer the check-in first</span>
               )}
             </div>
           </div>
@@ -788,13 +808,13 @@ export default function App() {
 
         {/* ── Dev panel (only when eye-tracking is active) ── */}
         {gazeLive && (
-          <section className="dev-panel" aria-label="開發觀察">
+          <section className="dev-panel" aria-label="Dev Panel">
             <button
               className="dev-panel-toggle"
               onClick={() => setDevPanelOpen(o => !o)}
               aria-expanded={devPanelOpen}
             >
-              {devPanelOpen ? '▲' : '▼'} 開發觀察
+              {devPanelOpen ? '▲' : '▼'} Dev Panel
             </button>
             {devPanelOpen && (
               <div className="dev-panel-body">

@@ -106,26 +106,26 @@ export interface CameraAdapter {
 
 export function parseCameraError(err: unknown): CameraError {
   if (!(err instanceof Error)) {
-    return { kind: 'unknown', message: '未知攝影機錯誤' }
+    return { kind: 'unknown', message: 'Unknown camera error.' }
   }
   const { name, message } = err
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-    return { kind: 'permission_denied', message: '攝影機權限遭拒。請在瀏覽器設定中允許後重試。' }
+    return { kind: 'permission_denied', message: 'Camera access denied. Please allow it in your browser settings and try again.' }
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return { kind: 'no_camera', message: '未偵測到攝影機裝置。' }
+    return { kind: 'no_camera', message: 'No camera device detected.' }
   }
   if (
     name === 'NotReadableError' ||
     name === 'TrackStartError' ||
     message.toLowerCase().includes('in use')
   ) {
-    return { kind: 'device_error', message: '攝影機無法讀取，可能正被其他應用程式使用。' }
+    return { kind: 'device_error', message: 'Camera could not be read — it may be in use by another application.' }
   }
   if (name === 'OverconstrainedError') {
-    return { kind: 'device_error', message: '攝影機不符合要求設定。' }
+    return { kind: 'device_error', message: 'Camera does not meet the required settings.' }
   }
-  return { kind: 'unknown', message: `攝影機初始化失敗：${message}` }
+  return { kind: 'unknown', message: `Camera initialization failed: ${message}` }
 }
 
 // ── FaceDetector singleton ────────────────────────────────────────────────
@@ -182,7 +182,7 @@ async function loadSharedDetector(): Promise<FaceDetectorAdapter> {
       _detectorLoadingPromise = null
       const camErr: CameraError = {
         kind: 'model_load_failed',
-        message: `AI 模型載入失敗：${err instanceof Error ? err.message : '未知錯誤'}`,
+        message: `AI model failed to load: ${err instanceof Error ? err.message : 'unknown error'}`,
       }
       _detectorLoadError = camErr
       throw camErr
@@ -256,7 +256,7 @@ async function loadSharedLandmarker(): Promise<FaceLandmarkerAdapter> {
       _landmarkerLoadingPromise = null
       const camErr: CameraError = {
         kind: 'model_load_failed',
-        message: `Face Landmarker 載入失敗：${err instanceof Error ? err.message : '未知錯誤'}`,
+        message: `Face Landmarker failed to load: ${err instanceof Error ? err.message : 'unknown error'}`,
       }
       _landmarkerLoadError = camErr
       throw camErr

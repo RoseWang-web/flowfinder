@@ -221,15 +221,15 @@ function buildActionMarkers(events: SortedEvent[], totalMs: number): TimeMarker[
 
     switch (event.eventType) {
       case 'check_in_shown':
-        markers.push({ ms, kind: 'check_in_shown', label: '回報提示', detail: `${fmtMs(ms)}` })
+        markers.push({ ms, kind: 'check_in_shown', label: 'Check-in shown', detail: `${fmtMs(ms)}` })
         break
       case 'check_in_answered': {
         const ans = String(event.data?.answer ?? '—')
-        markers.push({ ms, kind: 'check_in_answered', label: '回答回報', detail: ans })
+        markers.push({ ms, kind: 'check_in_answered', label: 'Check-in answered', detail: ans })
         break
       }
       case 'check_in_skipped':
-        markers.push({ ms, kind: 'check_in_skipped', label: '略過回報', detail: `${fmtMs(ms)}` })
+        markers.push({ ms, kind: 'check_in_skipped', label: 'Check-in skipped', detail: `${fmtMs(ms)}` })
         break
       case 'scroll': {
         const last = scrollClusters[scrollClusters.length - 1]
@@ -247,7 +247,7 @@ function buildActionMarkers(events: SortedEvent[], totalMs: number): TimeMarker[
     markers.push({
       ms: sc.ms,
       kind: 'scroll',
-      label: '捲動',
+      label: 'Scroll',
       detail: sc.count > 1 ? `×${sc.count}` : undefined,
     })
   }

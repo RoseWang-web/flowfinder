@@ -19,9 +19,9 @@ type Phase =
   | { kind: 'result'; summary: CalibrationSummary }
 
 const QUALITY_TEXT: Record<GazeQuality, { label: string; note: string }> = {
-  good: { label: '良好', note: '追蹤品質足以估計閱讀專注度。' },
-  usable: { label: '可用', note: '追蹤品質偏低，專注度估計會比較不準。' },
-  poor: { label: '不足', note: '追蹤品質太低，無法估計專注度。可以調整光線或坐姿後重新校準。' },
+  good: { label: 'Good', note: 'Tracking quality is sufficient for estimating reading attention.' },
+  usable: { label: 'Usable', note: 'Tracking quality is low; attention estimates may be less accurate.' },
+  poor: { label: 'Poor', note: 'Tracking quality is too low to estimate attention. Try adjusting lighting or posture and recalibrate.' },
 }
 
 function viewportSize() {
@@ -103,18 +103,18 @@ export function GazeCalibration({ tracker, onComplete, onCancel, now = () => per
 
   if (phase.kind === 'intro') {
     return (
-      <div className="gaze-overlay" role="dialog" aria-modal="true" aria-label="眼動校準">
+      <div className="gaze-overlay" role="dialog" aria-modal="true" aria-label="Eye tracking calibration">
         <div className="gaze-card gaze-card-intro">
-          <h2 className="gaze-title">眼動校準</h2>
-          <p className="gaze-text">請把臉放在上方預覽的框內，保持頭部大致不動。</p>
+          <h2 className="gaze-title">Eye Tracking Calibration</h2>
+          <p className="gaze-text">Keep your face inside the preview frame above and hold your head fairly still.</p>
           <ol className="gaze-steps">
-            <li>畫面上會依序出現 {CALIBRATION_POINTS.length} 個點，請<strong>看著點</strong>並點擊 {CLICKS_PER_POINT} 次。</li>
-            <li>接著會出現 {VALIDATION_POINTS.length} 個點，<strong>只要看著它</strong>，不用點擊，用來測量準確度。</li>
+            <li>{CALIBRATION_POINTS.length} points will appear in sequence. <strong>Look at each point</strong> and click it {CLICKS_PER_POINT} times.</li>
+            <li>Then {VALIDATION_POINTS.length} validation points will appear. <strong>Just look at each one</strong> — no clicking needed.</li>
           </ol>
-          <p className="gaze-note">影像只在你的瀏覽器裡處理，不會上傳或保存。</p>
+          <p className="gaze-note">Video is processed locally in your browser and never uploaded or saved.</p>
           <div className="gaze-actions">
-            <button className="btn btn-primary" onClick={startCalibration}>開始校準</button>
-            <button className="btn btn-ghost" onClick={onCancel}>取消</button>
+            <button className="btn btn-primary" onClick={startCalibration}>Start Calibration</button>
+            <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           </div>
         </div>
       </div>
@@ -124,17 +124,17 @@ export function GazeCalibration({ tracker, onComplete, onCancel, now = () => per
   if (phase.kind === 'calibrating') {
     const target = toPixels(CALIBRATION_POINTS[phase.point], viewport)
     return (
-      <div className="gaze-overlay gaze-overlay-points" role="dialog" aria-modal="true" aria-label="眼動校準">
+      <div className="gaze-overlay gaze-overlay-points" role="dialog" aria-modal="true" aria-label="Eye tracking calibration">
         <p className="gaze-progress">
-          校準 {phase.point + 1} / {CALIBRATION_POINTS.length}：看著點並點擊（還剩 {CLICKS_PER_POINT - phase.clicks} 次）
+          Calibration {phase.point + 1} / {CALIBRATION_POINTS.length}: look at the dot and click ({CLICKS_PER_POINT - phase.clicks} clicks left)
         </p>
         <button
           className="gaze-point"
           style={{ left: target.x, top: target.y, opacity: 0.4 + (0.6 * (phase.clicks + 1)) / CLICKS_PER_POINT }}
           onClick={handlePointClick}
-          aria-label={`校準點 ${phase.point + 1}`}
+          aria-label={`Calibration point ${phase.point + 1}`}
         />
-        <button className="btn btn-ghost btn-small gaze-cancel" onClick={onCancel}>取消</button>
+        <button className="btn btn-ghost btn-small gaze-cancel" onClick={onCancel}>Cancel</button>
       </div>
     )
   }
@@ -142,9 +142,9 @@ export function GazeCalibration({ tracker, onComplete, onCancel, now = () => per
   if (phase.kind === 'validating') {
     const target = toPixels(VALIDATION_POINTS[phase.point], viewport)
     return (
-      <div className="gaze-overlay gaze-overlay-points" role="dialog" aria-modal="true" aria-label="眼動驗證">
+      <div className="gaze-overlay gaze-overlay-points" role="dialog" aria-modal="true" aria-label="Eye tracking validation">
         <p className="gaze-progress">
-          驗證 {phase.point + 1} / {VALIDATION_POINTS.length}：只要看著點，不用點擊
+          Validation {phase.point + 1} / {VALIDATION_POINTS.length}: just look at the dot — no clicking needed
         </p>
         <div
           className="gaze-point gaze-point-validate"
@@ -159,31 +159,31 @@ export function GazeCalibration({ tracker, onComplete, onCancel, now = () => per
   const q = QUALITY_TEXT[summary.quality]
   const fmt = (v: number | null) => (v === null ? '—' : `${Math.round(v)} px`)
   return (
-    <div className="gaze-overlay" role="dialog" aria-modal="true" aria-label="校準結果">
+    <div className="gaze-overlay" role="dialog" aria-modal="true" aria-label="Calibration result">
       <div className="gaze-card">
-        <h2 className="gaze-title">校準結果</h2>
-        <p className={`gaze-quality gaze-quality-${summary.quality}`}>追蹤品質：{q.label}</p>
+        <h2 className="gaze-title">Calibration Result</h2>
+        <p className={`gaze-quality gaze-quality-${summary.quality}`}>Tracking quality: {q.label}</p>
         <p className="gaze-text">{q.note}</p>
         <div className="result-stats">
           <div className="stat-row">
-            <span className="stat-label">平均偏差（準確度）</span>
+            <span className="stat-label">Avg offset (accuracy)</span>
             <span className="stat-value">{fmt(summary.accuracyPx)}</span>
           </div>
           <div className="stat-row">
-            <span className="stat-label">抖動（精確度）</span>
+            <span className="stat-label">Jitter (precision)</span>
             <span className="stat-value">{fmt(summary.precisionPx)}</span>
           </div>
           <div className="stat-row">
-            <span className="stat-label">有偵測到視線的比例</span>
+            <span className="stat-label">Gaze detected ratio</span>
             <span className="stat-value">{Math.round(summary.validRatio * 100)}%</span>
           </div>
         </div>
         <div className="gaze-actions">
           {summary.quality !== 'poor' && (
-            <button className="btn btn-primary" onClick={() => onComplete(summary)}>開始閱讀</button>
+            <button className="btn btn-primary" onClick={() => onComplete(summary)}>Start Reading</button>
           )}
-          <button className="btn btn-secondary" onClick={startCalibration}>重新校準</button>
-          <button className="btn btn-ghost" onClick={onCancel}>取消</button>
+          <button className="btn btn-secondary" onClick={startCalibration}>Recalibrate</button>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
         </div>
       </div>
     </div>

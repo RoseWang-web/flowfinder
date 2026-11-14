@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useSession, READING_DURATION_MS, CHECK_IN_THRESHOLD_MS } from './useSession'
+import { useSession, READING_DURATION_MS, CHECK_IN_THRESHOLD_MS, getCheckInThreshold } from './useSession'
 
 // ── State machine (no fake timers needed) ────────────────────────────────
 
@@ -108,7 +108,7 @@ describe('useSession — timers and check-in', () => {
 
   test('time_up fires after full reading duration', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
 
     // Advance past check-in threshold, skip the dialog, then advance remaining time
     await act(async () => { vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500) })
@@ -127,7 +127,7 @@ describe('useSession — timers and check-in', () => {
 
   test('pausing stops effective time — session does NOT time out during pause', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
     await act(async () => { vi.advanceTimersByTime(30_000) })
     act(() => { result.current.pause() })
 
@@ -141,7 +141,7 @@ describe('useSession — timers and check-in', () => {
   // ── Bug 1 regression ──────────────────────────────────────────────────
   test('[Bug 1] check-in appears when activeReadingMs reaches threshold', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
 
     await act(async () => {
       vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500)
@@ -153,7 +153,7 @@ describe('useSession — timers and check-in', () => {
 
   test('[Bug 1] answerCheckIn dismisses dialog and transitions to running', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
     await act(async () => { vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500) })
 
     expect(result.current.checkInPending).toBe(true)
@@ -168,7 +168,7 @@ describe('useSession — timers and check-in', () => {
 
   test('[Bug 1] save interval does NOT revert checking_in back to running', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
     await act(async () => { vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500) })
 
     expect(result.current.status).toBe('checking_in')
@@ -182,7 +182,7 @@ describe('useSession — timers and check-in', () => {
 
   test('[Bug 1] skipCheckIn dismisses dialog and transitions to running', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
     await act(async () => { vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500) })
 
     act(() => { result.current.skipCheckIn() })
@@ -194,7 +194,7 @@ describe('useSession — timers and check-in', () => {
 
   test('check-in only appears once per session', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
     await act(async () => { vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500) })
     act(() => { result.current.answerCheckIn('partly') })
 
@@ -207,7 +207,7 @@ describe('useSession — timers and check-in', () => {
 
   test('pausing does not advance effective time toward check-in threshold', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
 
     // 30s active reading
     await act(async () => { vi.advanceTimersByTime(30_000) })
@@ -226,7 +226,7 @@ describe('useSession — timers and check-in', () => {
 
   test('answer time is not counted as effective reading time', async () => {
     const { result } = renderHook(() => useSession())
-    act(() => { result.current.start() })
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
     await act(async () => { vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500) })
 
     const activeAtCheckIn = result.current.session?.checkIn?.shownActiveReadingMs ?? 0
@@ -238,5 +238,23 @@ describe('useSession — timers and check-in', () => {
     // Active reading should still be ~shownActiveReadingMs (not + 10s)
     const activeAfterAnswer = result.current.session?.activeReadingMs ?? 0
     expect(activeAfterAnswer).toBeCloseTo(activeAtCheckIn, -2) // within ~100ms
+  })
+})
+
+// ── getCheckInThreshold ───────────────────────────────────────────────────────
+
+describe('getCheckInThreshold', () => {
+  test('returns 600_000 for unlimited sessions (plannedDurationMs = 0)', () => {
+    expect(getCheckInThreshold(0)).toBe(600_000)
+  })
+  test('returns half of planned duration for timed sessions', () => {
+    expect(getCheckInThreshold(1_800_000)).toBe(900_000)
+  })
+  test('enforces minimum of 60_000 when half would be less', () => {
+    expect(getCheckInThreshold(60_000)).toBe(60_000)
+    expect(getCheckInThreshold(30_000)).toBe(60_000)
+  })
+  test('returns 60_000 for the legacy 2-minute duration', () => {
+    expect(getCheckInThreshold(120_000)).toBe(60_000)
   })
 })

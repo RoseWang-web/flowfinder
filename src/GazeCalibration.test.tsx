@@ -33,10 +33,10 @@ function setup() {
 }
 
 async function clickAllCalibrationPoints() {
-  await act(async () => { fireEvent.click(screen.getByText('開始校準')) })
+  await act(async () => { fireEvent.click(screen.getByText('Start Calibration')) })
   for (let p = 0; p < CALIBRATION_POINTS.length; p++) {
     for (let c = 0; c < CLICKS_PER_POINT; c++) {
-      fireEvent.click(screen.getByLabelText(`校準點 ${p + 1}`))
+      fireEvent.click(screen.getByLabelText(`Calibration point ${p + 1}`))
     }
   }
 }
@@ -63,7 +63,7 @@ describe('GazeCalibration', () => {
   it('shows the camera preview only on the intro screen', async () => {
     const h = setup()
     expect(h.mock.tracker.showPreview).toHaveBeenLastCalledWith(true)
-    await act(async () => { fireEvent.click(screen.getByText('開始校準')) })
+    await act(async () => { fireEvent.click(screen.getByText('Start Calibration')) })
     expect(h.mock.tracker.showPreview).toHaveBeenLastCalledWith(false)
   })
 
@@ -77,12 +77,12 @@ describe('GazeCalibration', () => {
     expect(screen.getByTestId('validation-point')).toBeDefined()
   })
 
-  it('good tracking → result screen with 良好, and 開始閱讀 passes the summary', async () => {
+  it('good tracking → result screen with Good, and Start Reading passes the summary', async () => {
     const h = setup()
     await clickAllCalibrationPoints()
     runValidation(h, 40)
-    expect(screen.getByText('追蹤品質：良好')).toBeDefined()
-    fireEvent.click(screen.getByText('開始閱讀'))
+    expect(screen.getByText('Tracking quality: Good')).toBeDefined()
+    fireEvent.click(screen.getByText('Start Reading'))
     const summary = h.onComplete.mock.calls[0][0]
     expect(summary.quality).toBe('good')
     expect(summary.accuracyPx).toBeCloseTo(40, 0)
@@ -105,23 +105,23 @@ describe('GazeCalibration', () => {
         vi.advanceTimersByTime(POINT_MS)
       })
     }
-    expect(screen.getByText('追蹤品質：良好')).toBeDefined()
+    expect(screen.getByText('Tracking quality: Good')).toBeDefined()
   })
 
-  it('poor tracking → no 開始閱讀 button, can re-calibrate', async () => {
+  it('poor tracking → no Start Reading button, can re-calibrate', async () => {
     const h = setup()
     await clickAllCalibrationPoints()
     runValidation(h, 400)
-    expect(screen.getByText('追蹤品質：不足')).toBeDefined()
-    expect(screen.queryByText('開始閱讀')).toBeNull()
-    await act(async () => { fireEvent.click(screen.getByText('重新校準')) })
+    expect(screen.getByText('Tracking quality: Poor')).toBeDefined()
+    expect(screen.queryByText('Start Reading')).toBeNull()
+    await act(async () => { fireEvent.click(screen.getByText('Recalibrate')) })
     expect(h.mock.tracker.clearCalibration).toHaveBeenCalledTimes(2)
-    expect(screen.getByLabelText('校準點 1')).toBeDefined()
+    expect(screen.getByLabelText('Calibration point 1')).toBeDefined()
   })
 
   it('cancel works from the intro and from the points', async () => {
     const h = setup()
-    fireEvent.click(screen.getByText('取消'))
+    fireEvent.click(screen.getByText('Cancel'))
     expect(h.onCancel).toHaveBeenCalledTimes(1)
   })
 

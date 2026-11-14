@@ -15,6 +15,13 @@ import { loadSession, saveSession, clearSession, StorageError } from './storage'
 export const READING_DURATION_MS = 120_000
 export const CHECK_IN_THRESHOLD_MS = 60_000
 const ARTICLE_ID = 'reading-article-v1'
+
+/** Returns the ms at which check-in fires.
+ *  Unlimited sessions (0): 10 minutes. Timed: half duration, minimum 60 s. */
+export function getCheckInThreshold(plannedDurationMs: number): number {
+  if (plannedDurationMs === 0) return 600_000
+  return Math.max(plannedDurationMs / 2, 60_000)
+}
 const SAVE_INTERVAL_MS = 1_000
 
 function formatTime(totalSeconds: number): string {
@@ -50,11 +57,15 @@ export interface StartOptions {
   gazeEnabled?: boolean
   gaze?: GazeSessionInfo
   taskSettings?: SessionTaskSettings
+  /** Duration in ms. 0 = unlimited (∞). Default: 1_800_000 (30 min). */
+  plannedDurationMs?: number
 }
 
 export interface SessionUIState {
   status: SessionStatus
   remainingMs: number
+  /** 0 = unlimited. Consumers check this to switch between countdown and elapsed display. */
+  plannedDurationMs: number
   session: Session | null
   storageError: StorageError | null
   checkInPending: boolean
@@ -192,14 +203,17 @@ export function useSession(): SessionUIState & SessionActions {
     tickIntervalRef.current = setInterval(() => {
       if (segmentStartRef.current === null) return
       const activeMs = accumulatedMsRef.current + (Date.now() - segmentStartRef.current)
-      const remaining = READING_DURATION_MS - activeMs
+      const planned = sessionRef.current?.plannedDurationMs ?? READING_DURATION_MS
+      const isUnlimited = planned === 0
+      const checkInAt = getCheckInThreshold(planned)
+      const remaining = isUnlimited ? Infinity : planned - activeMs
 
       // Check if check-in should be shown
       if (
         !checkInShownRef.current &&
         !deferredCheckInRef.current &&
-        activeMs >= CHECK_IN_THRESHOLD_MS &&
-        remaining > 0
+        activeMs >= checkInAt &&
+        (isUnlimited || remaining > 0)
       ) {
         checkInShownRef.current = true
         // snapshot accumulated ms at the moment check-in fires
@@ -241,10 +255,12 @@ export function useSession(): SessionUIState & SessionActions {
         return
       }
 
-      if (remaining <= 0) {
-        complete('time_up', READING_DURATION_MS)
-      } else {
+      if (!isUnlimited && remaining <= 0) {
+        complete('time_up', planned)
+      } else if (!isUnlimited) {
         setRemainingMs(remaining)
+      } else {
+        setRemainingMs(activeMs)   // unlimited: expose elapsed as remainingMs
       }
     }, 250)
   }, [clearTick, clearSaveInterval, complete, persistSession])
@@ -414,7 +430,8 @@ export function useSession(): SessionUIState & SessionActions {
         lastSavedAt: now,
       }
       setSession(interrupted)
-      setRemainingMs(READING_DURATION_MS - loaded.activeReadingMs)
+      const loadedPlanned = loaded.plannedDurationMs ?? READING_DURATION_MS
+      setRemainingMs(loadedPlanned === 0 ? loaded.activeReadingMs : loadedPlanned - loaded.activeReadingMs)
       setHasStoredData(true)
       persistSession(interrupted)
     } else {
@@ -423,7 +440,8 @@ export function useSession(): SessionUIState & SessionActions {
       if (loaded.status === 'completed') {
         setRemainingMs(0)
       } else {
-        setRemainingMs(READING_DURATION_MS - loaded.activeReadingMs)
+        const loadedPlanned = loaded.plannedDurationMs ?? READING_DURATION_MS
+        setRemainingMs(loadedPlanned === 0 ? loaded.activeReadingMs : loadedPlanned - loaded.activeReadingMs)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -452,6 +470,8 @@ export function useSession(): SessionUIState & SessionActions {
     accumulatedMsRef.current = 0
     segmentStartRef.current = null
 
+    const plannedMs = opts?.plannedDurationMs ?? 1_800_000
+
     const newSession: Session = {
       schemaVersion: SCHEMA_VERSION,
       sessionId: makeId(),
@@ -470,6 +490,7 @@ export function useSession(): SessionUIState & SessionActions {
       taskSettings: opts?.taskSettings
         ? { ...opts.taskSettings, rules: { ...opts.taskSettings.rules } }
         : undefined,
+      plannedDurationMs: plannedMs,
       events: [
         {
           id: makeId(),
@@ -486,7 +507,7 @@ export function useSession(): SessionUIState & SessionActions {
 
     sessionRef.current = newSession
     setSession(newSession)
-    setRemainingMs(READING_DURATION_MS)
+    setRemainingMs(plannedMs === 0 ? 0 : plannedMs)
     setCheckInPending(false)
     persistSession(newSession)
     startTicking()
@@ -638,6 +659,7 @@ export function useSession(): SessionUIState & SessionActions {
   return {
     status,
     remainingMs,
+    plannedDurationMs: session?.plannedDurationMs ?? 1_800_000,
     session,
     storageError,
     checkInPending,
