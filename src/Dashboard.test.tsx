@@ -11,6 +11,7 @@ import { Dashboard } from './Dashboard'
 import { upsertHistoryEntry } from './historyStorage'
 import { makePendingAnalysis } from './analysisTypes'
 import type { Session } from './types'
+import type { AnalysisResult } from './analysisTypes'
 
 afterEach(() => {
   localStorage.clear()
@@ -102,6 +103,31 @@ describe('Dashboard time-grid', () => {
     await act(async () => { await userEvent.click(printBtn) })
     expect(printSpy).toHaveBeenCalledOnce()
     printSpy.mockRestore()
+  })
+
+  it('day view block shows score % inside the block button', async () => {
+    const today = new Date()
+    today.setHours(9, 0, 0, 0)
+    const session: Session = {
+      schemaVersion: 2, sessionId: 'score-test', articleId: 'test',
+      startedAt: today.getTime(), status: 'completed',
+      durationMs: 60 * 60 * 1000, activeReadingMs: 60 * 60 * 1000,
+      lastSavedAt: today.getTime() + 60 * 60 * 1000,
+      endedAt: today.getTime() + 60 * 60 * 1000,
+      endReason: 'manual', checkIn: null, cameraEnabled: false, events: [],
+      taskSettings: { categoryId: 'study_notes', rulesVersion: 1,
+        rules: { allowHeadDown: true, allowTabSwitch: false, allowWindowBlur: true },
+        taskTitle: 'Morning Study' },
+    }
+    const analysis: AnalysisResult = {
+      sessionId: 'score-test', status: 'ready', totalScore: 80,
+      summary: null, scoringVersion: '1.0.0', source: 'real', analyzedAt: Date.now(),
+    }
+    upsertHistoryEntry({ session, analysis, entryVersion: 1 })
+    render(<Dashboard onStartNewSession={() => {}} />)
+    // The session block button itself must contain "80%" as text
+    const block = screen.getAllByRole('button', { name: /9:00/ })[0]
+    expect(block.textContent).toContain('80%')
   })
 
   it('month view shows one dot per session on the same day', async () => {

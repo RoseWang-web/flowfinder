@@ -453,22 +453,23 @@ function DayView({
           const { session } = entry
           const { top, height } = getBlockGeometry(session)
           const effectiveScore = getEffectiveScore(entry)
+          const color = scoreToColor(effectiveScore)
           const title = session.taskSettings?.taskTitle || categoryLabel(session.taskSettings?.categoryId)
           const timeLabel = `${localTimeString(session.startedAt, tz)}${session.endedAt ? ` to ${localTimeString(session.endedAt, tz)}` : ''}`
           return (
             <button
               key={session.sessionId}
               className="cal-blk"
-              style={{ top, height }}
+              style={{ top, height, background: color.bg }}
               onClick={() => onSelectEntry(entry)}
               aria-label={`${timeLabel}, ${title}, ${formatScore(effectiveScore)}`}
             >
               <b className="cal-blk-title">{title}</b>
-              {height > 40 && (
-                <span className="cal-blk-meta">{msToHHMM(session.activeReadingMs)} focus</span>
+              {height > 36 && isValidScore(effectiveScore) && (
+                <span className="cal-blk-score">{Math.round(effectiveScore as number)}%</span>
               )}
-              {height > 60 && isValidScore(effectiveScore) && (
-                <ScoreBadge score={effectiveScore} />
+              {height > 56 && (
+                <span className="cal-blk-meta">{msToHHMM(session.activeReadingMs)} focus</span>
               )}
             </button>
           )
@@ -535,19 +536,24 @@ function WeekView({
               {entries.map(entry => {
                 const { session } = entry
                 const { top, height } = getBlockGeometry(session)
+                const effectiveScore = getEffectiveScore(entry)
+                const color = scoreToColor(effectiveScore)
                 const title = session.taskSettings?.taskTitle || categoryLabel(session.taskSettings?.categoryId)
                 const timeLabel = localTimeString(session.startedAt, tz)
                 return (
                   <button
                     key={session.sessionId}
                     className="cal-blk"
-                    style={{ top, height }}
+                    style={{ top, height, background: color.bg }}
                     onClick={() => onSelectEntry(entry)}
-                    aria-label={`${timeLabel}, ${title}`}
-                    title={`${title} · ${timeLabel} · ${msToHHMM(session.activeReadingMs)}`}
+                    aria-label={`${timeLabel}, ${title}, ${formatScore(effectiveScore)}`}
+                    title={`${title} · ${timeLabel} · ${formatScore(effectiveScore)}`}
                   >
                     <b className="cal-blk-title">{title}</b>
-                    {height > 40 && (
+                    {height > 36 && isValidScore(effectiveScore) && (
+                      <span className="cal-blk-score">{Math.round(effectiveScore as number)}%</span>
+                    )}
+                    {height > 56 && (
                       <span className="cal-blk-meta">{msToHHMM(session.activeReadingMs)}</span>
                     )}
                   </button>
