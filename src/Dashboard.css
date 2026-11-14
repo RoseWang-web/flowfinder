@@ -582,6 +582,211 @@
   margin-top: auto;
 }
 
+/* ── Time-grid shared ─────────────────────────────────────────────────────── */
+
+.cal-gutter {
+  width: 56px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-gh {
+  height: 44px; /* matches PX constant */
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: right;
+  padding-right: 8px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+}
+
+.cal-gh span {
+  position: relative;
+  top: -7px;
+}
+
+/* ── Day view — time grid ─────────────────────────────────────────────────── */
+
+.cal-tgrid {
+  display: flex;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  max-width: 760px;
+}
+
+.cal-col-wide {
+  flex: 1;
+  position: relative;
+  border-left: 1px solid var(--line);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 43px,
+    var(--line) 43px 44px
+  );
+}
+
+.cal-empty-day {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* ── Week view — time grid ────────────────────────────────────────────────── */
+
+.cal-week {
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.cal-whead {
+  display: grid;
+  grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+  border-bottom: 1.5px solid var(--line);
+  background: #F7F1E6;
+}
+
+.cal-gh-corner {
+  border-right: 1px solid var(--line);
+}
+
+.cal-wh {
+  padding: 8px 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--muted);
+  border: none;
+  border-left: 1px solid var(--line);
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .1s;
+}
+
+.cal-wh:hover {
+  background: #EEE6D6;
+}
+
+.cal-wh-name {
+  display: block;
+  text-transform: uppercase;
+}
+
+.cal-wh-date {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 4px auto 0;
+  font-family: "Young Serif", Georgia, serif;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: 0;
+  border-radius: 50%;
+}
+
+.cal-wh.today .cal-wh-date {
+  background: var(--navy);
+  color: #fff;
+}
+
+.cal-wscroll {
+  display: grid;
+  grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.cal-wcol {
+  position: relative;
+  border-left: 1px solid var(--line);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 43px,
+    var(--line) 43px 44px
+  );
+}
+
+/* ── Session blocks ───────────────────────────────────────────────────────── */
+
+.cal-blk {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 12px;
+  text-align: left;
+  border: none;
+  background: var(--navy);
+  color: #fff;
+  overflow: hidden;
+  line-height: 1.3;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: box-shadow .12s;
+}
+
+.cal-blk:hover {
+  box-shadow: 0 0 0 2px var(--sun);
+}
+
+.cal-blk-title {
+  display: block;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: "Young Serif", Georgia, serif;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.cal-blk-meta {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,.75);
+}
+
+/* ── Now line ─────────────────────────────────────────────────────────────── */
+
+.cal-nowline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--red);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cal-nowline::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
 /* ── Detail overlay ───────────────────────────────────────────────────────── */
 
 .detail-overlay {

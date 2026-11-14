@@ -49,6 +49,34 @@ type DashboardMode = 'real' | 'demo'
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// Time-grid constants (matches designer: 6 AM – midnight, 44px/hour)
+const H0 = 6         // first visible hour
+const H1 = 24        // last hour (exclusive)
+const PX = 44        // pixels per hour
+const H_TOTAL = (H1 - H0) * PX  // total column height in px
+const HOURS = Array.from({ length: H1 - H0 }, (_, i) => H0 + i)
+
+function formatHour(h: number): string {
+  if (h === 0 || h === 24) return '12 AM'
+  if (h === 12) return '12 PM'
+  return h < 12 ? `${h} AM` : `${h - 12} PM`
+}
+
+function getBlockGeometry(session: { startedAt: number; durationMs: number }): { top: number; height: number } {
+  const start = new Date(session.startedAt)
+  const startMins = start.getHours() * 60 + start.getMinutes()
+  const top = Math.max(0, (startMins - H0 * 60) / 60 * PX)
+  const height = Math.max(28, session.durationMs / 3_600_000 * PX)
+  return { top, height }
+}
+
+function nowLineTop(): number {
+  const now = new Date()
+  const mins = now.getHours() * 60 + now.getMinutes()
+  if (mins < H0 * 60 || mins >= H1 * 60) return -1
+  return (mins - H0 * 60) / 60 * PX
+}
+
 function endReasonLabel(r: Session['endReason']): string {
   if (r === 'time_up') return "Time's Up"
   if (r === 'manual') return 'Ended Early'
@@ -370,98 +398,149 @@ function SessionDetail({
   )
 }
 
-// ── Day view ──────────────────────────────────────────────────────────────────
+// ── Now-line indicator ────────────────────────────────────────────────────────
+
+function NowLineCal() {
+  const [top, setTop] = useState(() => nowLineTop())
+  useEffect(() => {
+    const id = setInterval(() => setTop(nowLineTop()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  if (top < 0) return null
+  return <div className="cal-nowline" style={{ top }} aria-hidden="true" />
+}
+
+// ── Day view — time grid ──────────────────────────────────────────────────────
 
 function DayView({
+  date,
   entries,
   onSelectEntry,
 }: {
+  date: string
   entries: HistoryEntry[]
   onSelectEntry: (entry: HistoryEntry) => void
 }) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const sorted = [...entries].sort((a, b) => a.session.startedAt - b.session.startedAt)
-
-  if (sorted.length === 0) {
-    return <p className="dash-empty-day">No sessions on this day</p>
-  }
+  const isToday = date === todayString()
 
   return (
-    <div className="day-view">
-      {sorted.map(entry => {
-        const { session } = entry
-        const effectiveScore = getEffectiveScore(entry)
-        const color = scoreToColor(effectiveScore)
-        return (
-          <button
-            key={session.sessionId}
-            className="day-session-card"
-            style={{ borderLeftColor: color.bg }}
-            onClick={() => onSelectEntry(entry)}
-            aria-label={`Session at ${localTimeString(session.startedAt, tz)}, score ${formatScore(effectiveScore)}`}
-          >
-            <div className="day-session-time">
-              <span>{localTimeString(session.startedAt, tz)}</span>
-              {session.endedAt && (
-                <span className="day-session-time-end">～{localTimeString(session.endedAt, tz)}</span>
+    <div className="cal-tgrid">
+      <div className="cal-gutter" aria-hidden="true">
+        {HOURS.map(h => (
+          <div key={h} className="cal-gh"><span>{formatHour(h)}</span></div>
+        ))}
+      </div>
+      <div className="cal-col-wide" style={{ height: H_TOTAL }}>
+        {entries.map(entry => {
+          const { session } = entry
+          const { top, height } = getBlockGeometry(session)
+          const effectiveScore = getEffectiveScore(entry)
+          const title = session.taskSettings?.taskTitle || categoryLabel(session.taskSettings?.categoryId)
+          const timeLabel = `${localTimeString(session.startedAt, tz)}${session.endedAt ? ` to ${localTimeString(session.endedAt, tz)}` : ''}`
+          return (
+            <button
+              key={session.sessionId}
+              className="cal-blk"
+              style={{ top, height }}
+              onClick={() => onSelectEntry(entry)}
+              aria-label={`${timeLabel}, ${title}, ${formatScore(effectiveScore)}`}
+            >
+              <b className="cal-blk-title">{title}</b>
+              {height > 40 && (
+                <span className="cal-blk-meta">{msToHHMM(session.activeReadingMs)} focus</span>
               )}
-            </div>
-            <div className="day-session-meta">
-              <span className="day-session-cat">{categoryLabel(session.taskSettings?.categoryId)}</span>
-              <span className="day-session-active">{msToHHMM(session.activeReadingMs)}</span>
-            </div>
-            <ScoreBadge score={effectiveScore} />
-          </button>
-        )
-      })}
+              {height > 60 && isValidScore(effectiveScore) && (
+                <ScoreBadge score={effectiveScore} />
+              )}
+            </button>
+          )
+        })}
+        {isToday && <NowLineCal />}
+        {entries.length === 0 && (
+          <p className="cal-empty-day">No sessions on this day</p>
+        )}
+      </div>
     </div>
   )
 }
 
-// ── Week view ─────────────────────────────────────────────────────────────────
+// ── Week view — time grid ─────────────────────────────────────────────────────
 
 function WeekView({
   weekDates,
   byDay,
   onSelectDay,
+  onSelectEntry,
 }: {
   weekDates: string[]
   byDay: Map<string, HistoryEntry[]>
   onSelectDay: (date: string) => void
+  onSelectEntry: (entry: HistoryEntry) => void
 }) {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const today = todayString()
-  return (
-    <div className="week-view">
-      {weekDates.map((date, i) => {
-        const entries = byDay.get(date) ?? []
-        const avg = computeWeightedAverage(entries)
-        const color = isValidScore(avg) ? scoreToColor(avg) : NEUTRAL_COLOR
-        const totalActive = entries.reduce((s, e) => s + e.session.activeReadingMs, 0)
-        const hasData = entries.length > 0
-        const isToday = date === today
 
-        return (
-          <button
-            key={date}
-            className={`week-day-cell ${isToday ? 'week-day-today' : ''} ${!hasData ? 'week-day-empty' : ''}`}
-            style={hasData ? { background: color.light, borderColor: color.bg } : {}}
-            onClick={() => onSelectDay(date)}
-            aria-label={`${date} ${hasData ? formatScore(avg) : 'No data'}`}
-          >
-            <span className="week-day-name">{WEEK_DAYS[i]}</span>
-            <span className="week-day-date">{date.slice(8)}</span>
-            {hasData ? (
-              <>
-                <ScoreBadge score={avg} />
-                <span className="week-day-active">{msToHHMM(totalActive)}</span>
-                <span className="week-day-count">{entries.length} session{entries.length !== 1 ? 's' : ''}</span>
-              </>
-            ) : (
-              <span className="week-day-no-data">—</span>
-            )}
-          </button>
-        )
-      })}
+  return (
+    <div className="cal-week">
+      {/* Column headers */}
+      <div className="cal-whead">
+        <div className="cal-gh-corner" aria-hidden="true" />
+        {weekDates.map((date, i) => {
+          const isToday = date === today
+          const dayNum = date.slice(8).replace(/^0/, '')
+          return (
+            <button
+              key={date}
+              className={`cal-wh${isToday ? ' today' : ''}`}
+              onClick={() => onSelectDay(date)}
+              aria-label={date}
+            >
+              <span className="cal-wh-name">{WEEK_DAYS[i]}</span>
+              <b className="cal-wh-date">{dayNum}</b>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Scrollable body */}
+      <div className="cal-wscroll">
+        <div className="cal-gutter" aria-hidden="true">
+          {HOURS.map(h => (
+            <div key={h} className="cal-gh"><span>{formatHour(h)}</span></div>
+          ))}
+        </div>
+        {weekDates.map(date => {
+          const entries = byDay.get(date) ?? []
+          const isToday = date === today
+          return (
+            <div key={date} className="cal-wcol" style={{ height: H_TOTAL }}>
+              {entries.map(entry => {
+                const { session } = entry
+                const { top, height } = getBlockGeometry(session)
+                const title = session.taskSettings?.taskTitle || categoryLabel(session.taskSettings?.categoryId)
+                const timeLabel = localTimeString(session.startedAt, tz)
+                return (
+                  <button
+                    key={session.sessionId}
+                    className="cal-blk"
+                    style={{ top, height }}
+                    onClick={() => onSelectEntry(entry)}
+                    aria-label={`${timeLabel}, ${title}`}
+                    title={`${title} · ${timeLabel} · ${msToHHMM(session.activeReadingMs)}`}
+                  >
+                    <b className="cal-blk-title">{title}</b>
+                    {height > 40 && (
+                      <span className="cal-blk-meta">{msToHHMM(session.activeReadingMs)}</span>
+                    )}
+                  </button>
+                )
+              })}
+              {isToday && <NowLineCal />}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -838,6 +917,7 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
           <div className="dash-main">
             {view === 'day' && (
               <DayView
+                date={focusDate}
                 entries={byDay.get(focusDate) ?? []}
                 onSelectEntry={setSelectedEntry}
               />
@@ -847,6 +927,7 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
                 weekDates={currentWeekDates}
                 byDay={byDay}
                 onSelectDay={handleSelectDay}
+                onSelectEntry={setSelectedEntry}
               />
             )}
             {view === 'month' && (
