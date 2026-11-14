@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "description": "Mind-wandering score from webcam gaze during reading. Higher = more likely mind wandering.",
+  "features": [
+    "nLineReturns",
+    "xProgress"
+  ],
+  "weights": [
+    -0.243553,
+    -0.358581
+  ],
+  "intercept": -0.125899,
+  "standardization": "per-user online z-score of each feature (units cancel out, so px instead of degrees is fine)",
+  "params": {
+    "sampleHz": 30,
+    "windowSeconds": 10,
+    "stepSeconds": 2,
+    "smoothSeconds": 0.2,
+    "lineReturnLookbackSeconds": 0.5,
+    "lineReturnColumnFraction": 0.5,
+    "maxGapMs": 100,
+    "maxMissingRatio": 0.5,
+    "warmupWindows": 10,
+    "trendWindows": 15
+  },
+  "training": {
+    "dataset": "ReMind (eye tracker, degraded to simulated webcam)",
+    "condition": "webcam_typical",
+    "nSubjects": 19,
+    "nWindows": 16912,
+    "mindWanderingRate": 0.0313,
+    "cvRocAuc": 0.637,
+    "classWeight": "balanced (the score is a ranking, not a calibrated probability)",
+    "exportedAt": "2026-11-14"
+  }
+}
