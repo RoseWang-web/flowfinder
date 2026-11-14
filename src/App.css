@@ -902,3 +902,137 @@
   color: #111;
   margin-left: 4px;
 }
+
+/* ── Eye-tracking (calibration overlay + indicator) ── */
+.gaze-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gaze-overlay-points {
+  background: #f8fafc;
+  display: block;
+}
+
+.gaze-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 480px;
+  width: calc(100% - 32px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+/* Leave room above the card for WebGazer's centred camera preview */
+.gaze-card-intro {
+  margin-top: 260px;
+}
+
+.gaze-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.gaze-text {
+  color: #333;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+
+.gaze-steps {
+  padding-left: 20px;
+  line-height: 1.8;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.gaze-note {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.gaze-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.gaze-progress {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 48px);
+  color: #475569;
+  font-size: 0.95rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.gaze-point {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: #dc2626;
+  box-shadow: 0 0 0 2px #dc2626;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gaze-point-validate {
+  background: #2563eb;
+  box-shadow: 0 0 0 2px #2563eb;
+  cursor: default;
+  animation: gaze-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes gaze-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.7); }
+}
+
+.gaze-cancel {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.gaze-quality {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.gaze-quality-good { color: #16a34a; }
+.gaze-quality-usable { color: #d97706; }
+.gaze-quality-poor { color: #dc2626; }
+
+.gaze-consent {
+  margin-top: 12px;
+}
+
+.gaze-indicator {
+  font-size: 0.8rem;
+  color: #475569;
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.result-subtitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 14px 0 6px;
+}

@@ -143,4 +143,51 @@ describe('Result page with timeline', () => {
     expect(screen.getByText('本次任務設定')).toBeDefined()
     expect(screen.getByRole('combobox')).toBeDefined()
   })
+
+  it('gaze session: result page shows the attention band and the check-in comparison', () => {
+    const events: Session['events'] = [
+      { id: 's', sessionId: 'sess-1', eventType: 'session_start', elapsedMs: 0, activeReadingMs: 0, data: { visible: true } },
+    ]
+    for (let ms = 10_000; ms <= 110_000; ms += 2_000) {
+      const ok = ms >= 28_000
+      events.push({
+        id: `a${ms}`, sessionId: 'sess-1', eventType: 'attention_score', elapsedMs: ms, activeReadingMs: ms,
+        data: ok
+          ? { status: 'ok', score: 0.5, trend: 0.5, nLineReturns: 3, xProgress: 120, missingRatio: 0 }
+          : { status: 'warming_up', nLineReturns: 3, xProgress: 120, missingRatio: 0 },
+      })
+    }
+    events.push({ id: 'c1', sessionId: 'sess-1', eventType: 'check_in_shown', elapsedMs: 60_000, activeReadingMs: 60_000 })
+    events.push({ id: 'c2', sessionId: 'sess-1', eventType: 'check_in_answered', elapsedMs: 63_000, activeReadingMs: 60_000, data: { answer: 'on_task' } })
+    saveSession(makeCompletedSession({
+      gazeEnabled: true,
+      gaze: {
+        modelCvRocAuc: 0.637,
+        calibration: {
+          quality: 'good', accuracyPx: 80, precisionPx: 60, validRatio: 0.95,
+          viewport: { width: 1000, height: 800 }, points: [], calibratedAt: BASE_TS,
+        },
+      },
+      checkIn: { shownAt: BASE_TS + 60_000, shownElapsedMs: 60_000, shownActiveReadingMs: 60_000, answeredAt: BASE_TS + 63_000, answer: 'on_task', skipped: false },
+      events,
+    }))
+    render(<App />)
+    expect(screen.getByText('眼動追蹤')).toBeDefined()
+    expect(screen.getByText('專注度')).toBeDefined()
+    expect(screen.getByText('專注度趨勢')).toBeDefined()
+    expect(screen.getByText('回報前後對照')).toBeDefined()
+    // 15 windows in the 30 s before the prompt, focus = 1 − 0.5
+    expect(screen.getByText('（15 個窗口）')).toBeDefined()
+    expect(screen.getAllByText('0.50').length).toBe(2)
+    expect(screen.getAllByRole('button', { name: /^專注度，/ }).length).toBeGreaterThan(30)
+    expect(screen.getByText('下載本次資料（JSON）')).toBeDefined()
+    // attention_score events are summarised, not listed one by one
+    expect(screen.queryAllByText('專注度估計').length).toBe(1)
+  })
+
+  it('non-gaze session: no attention band', () => {
+    saveSession(makeCompletedSession())
+    render(<App />)
+    expect(screen.queryByText('專注度趨勢')).toBeNull()
+  })
 })
