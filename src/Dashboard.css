@@ -1172,19 +1172,38 @@
   gap: 8px;
 }
 
-/* ── Print: show only the detail panel ───────────────────────────────────── */
+/* ── Print ────────────────────────────────────────────────────────────────── */
 
 @media print {
+  /* Always hide app chrome */
   .dash-header,
   .dash-mode-bar,
-  .dash-controls,
-  .summary-bar,
-  .dash-main,
   .dash-error-banner,
   .dash-empty-state,
   .demo-label { display: none !important; }
 
-  .detail-overlay {
+  /* ── Mode A: print the calendar view (data-print-cal attribute set) ── */
+  [data-print-cal] .dash-controls { display: none !important; }
+  [data-print-cal] .detail-overlay { display: none !important; }
+  [data-print-cal] .summary-bar { display: flex !important; }
+  [data-print-cal] .dash-main {
+    display: block !important;
+    padding: 16px 0 !important;
+  }
+  /* Week: unscroll the time grid so all hours are visible */
+  [data-print-cal] .cal-wscroll {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* Month: prevent orphaned rows */
+  [data-print-cal] .month-view { break-inside: avoid; }
+
+  /* ── Mode B: print only the detail panel (no data-print-cal) ── */
+  .dashboard-page:not([data-print-cal]) .dash-controls,
+  .dashboard-page:not([data-print-cal]) .summary-bar,
+  .dashboard-page:not([data-print-cal]) .dash-main { display: none !important; }
+
+  .dashboard-page:not([data-print-cal]) .detail-overlay {
     position: static !important;
     background: none !important;
     padding: 0 !important;
@@ -1199,11 +1218,11 @@
     box-shadow: none !important;
   }
 
-  /* hide close button and print button itself when printing */
+  /* hide close + print buttons when printing the detail panel */
   .detail-header .btn-icon,
-  .detail-panel .btn-secondary:first-of-type { display: none !important; }
+  .detail-panel > .btn-secondary:first-of-type { display: none !important; }
 
-  /* expand any collapsed sections */
+  /* expand any toggled sections */
   .detail-timeline,
   .detail-event-list { max-height: none !important; overflow: visible !important; }
 }

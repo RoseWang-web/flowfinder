@@ -82,6 +82,28 @@ describe('Dashboard time-grid', () => {
     expect(screen.getAllByText(/Morning Study/).length).toBeGreaterThan(0)
   })
 
+  it('week view has a Print Week button that calls window.print', async () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
+    makeEntry()
+    render(<Dashboard onStartNewSession={() => {}} />)
+    await act(async () => { await userEvent.click(screen.getByRole('button', { name: /week/i })) })
+    const printBtn = screen.getByRole('button', { name: /print week/i })
+    await act(async () => { await userEvent.click(printBtn) })
+    expect(printSpy).toHaveBeenCalledOnce()
+    printSpy.mockRestore()
+  })
+
+  it('month view has a Print Month button that calls window.print', async () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
+    makeEntry()
+    render(<Dashboard onStartNewSession={() => {}} />)
+    await act(async () => { await userEvent.click(screen.getByRole('button', { name: /month/i })) })
+    const printBtn = screen.getByRole('button', { name: /print month/i })
+    await act(async () => { await userEvent.click(printBtn) })
+    expect(printSpy).toHaveBeenCalledOnce()
+    printSpy.mockRestore()
+  })
+
   it('session detail panel has a Print button that calls window.print', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
     makeEntry()

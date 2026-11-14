@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { TimelineChart } from './TimelineChart'
 import { buildTimeline } from './timeline'
 import {
@@ -676,6 +676,7 @@ export interface DashboardProps {
 
 export function Dashboard({ onStartNewSession }: DashboardProps) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const pageRef = useRef<HTMLDivElement>(null)
 
   // ── Mode ──────────────────────────────────────────────────────────────
   const [mode, setMode] = useState<DashboardMode>('real')
@@ -775,6 +776,17 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
     setSelectedEntry(null)
   }, [tz])
 
+  const handlePrintCalendar = useCallback(() => {
+    const el = pageRef.current
+    if (el) el.setAttribute('data-print-cal', '')
+    const cleanup = () => {
+      if (el) el.removeAttribute('data-print-cal')
+      window.removeEventListener('afterprint', cleanup)
+    }
+    window.addEventListener('afterprint', cleanup)
+    window.print()
+  }, [])
+
   const handleSelectDay = useCallback((date: string) => {
     setFocusDate(date)
     setView('day')
@@ -841,7 +853,7 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
   const isRealEmpty = mode === 'real' && allEntries.length === 0 && !loadError
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page" ref={pageRef}>
       {/* Header */}
       <header className="dash-header">
         <div className="dash-header-left">
@@ -920,6 +932,13 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
               <span className="dash-period-label">{periodLabel}</span>
               <button className="btn-icon" onClick={() => navigate(1)} aria-label="Next">▶</button>
               <button className="btn btn-ghost btn-small" onClick={goToday}>Today</button>
+              <button
+                className="btn btn-secondary btn-small"
+                onClick={handlePrintCalendar}
+                aria-label={`Print ${view === 'day' ? 'Day' : view === 'week' ? 'Week' : 'Month'}`}
+              >
+                🖨 Print {view === 'day' ? 'Day' : view === 'week' ? 'Week' : 'Month'}
+              </button>
             </div>
             <div className="dash-filter">
               <label htmlFor="dash-cat-filter" className="sr-only">Filter by Category</label>
