@@ -434,10 +434,16 @@ function DayView({
   date,
   entries,
   onSelectEntry,
+  selectMode = false,
+  selectedIds,
+  onToggleSelect,
 }: {
   date: string
   entries: HistoryEntry[]
   onSelectEntry: (entry: HistoryEntry) => void
+  selectMode?: boolean
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const isToday = date === todayString()
@@ -457,14 +463,17 @@ function DayView({
           const color = scoreToColor(effectiveScore)
           const title = session.taskSettings?.taskTitle || categoryLabel(session.taskSettings?.categoryId)
           const timeLabel = `${localTimeString(session.startedAt, tz)}${session.endedAt ? ` to ${localTimeString(session.endedAt, tz)}` : ''}`
+          const isChecked = selectMode && selectedIds?.has(session.sessionId)
           return (
             <button
               key={session.sessionId}
-              className="cal-blk"
+              className={`cal-blk${isChecked ? ' cal-blk-selected' : ''}`}
               style={{ top, height, background: color.bg }}
-              onClick={() => onSelectEntry(entry)}
+              onClick={() => selectMode ? onToggleSelect?.(session.sessionId) : onSelectEntry(entry)}
               aria-label={`${timeLabel}, ${title}, ${formatScore(effectiveScore)}`}
+              aria-pressed={selectMode ? isChecked : undefined}
             >
+              {isChecked && <span className="cal-blk-check" aria-hidden="true">✓</span>}
               <b className="cal-blk-title">{title}</b>
               {height > 36 && isValidScore(effectiveScore) && (
                 <span className="cal-blk-score">{Math.round(effectiveScore as number)}%</span>
@@ -491,11 +500,17 @@ function WeekView({
   byDay,
   onSelectDay,
   onSelectEntry,
+  selectMode = false,
+  selectedIds,
+  onToggleSelect,
 }: {
   weekDates: string[]
   byDay: Map<string, HistoryEntry[]>
   onSelectDay: (date: string) => void
   onSelectEntry: (entry: HistoryEntry) => void
+  selectMode?: boolean
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const today = todayString()
@@ -541,15 +556,18 @@ function WeekView({
                 const color = scoreToColor(effectiveScore)
                 const title = session.taskSettings?.taskTitle || categoryLabel(session.taskSettings?.categoryId)
                 const timeLabel = localTimeString(session.startedAt, tz)
+                const isChecked = selectMode && selectedIds?.has(session.sessionId)
                 return (
                   <button
                     key={session.sessionId}
-                    className="cal-blk"
+                    className={`cal-blk${isChecked ? ' cal-blk-selected' : ''}`}
                     style={{ top, height, background: color.bg }}
-                    onClick={() => onSelectEntry(entry)}
+                    onClick={() => selectMode ? onToggleSelect?.(session.sessionId) : onSelectEntry(entry)}
                     aria-label={`${timeLabel}, ${title}, ${formatScore(effectiveScore)}`}
+                    aria-pressed={selectMode ? isChecked : undefined}
                     title={`${title} · ${timeLabel} · ${formatScore(effectiveScore)}`}
                   >
+                    {isChecked && <span className="cal-blk-check" aria-hidden="true">✓</span>}
                     <b className="cal-blk-title">{title}</b>
                     {height > 36 && isValidScore(effectiveScore) && (
                       <span className="cal-blk-score">{Math.round(effectiveScore as number)}%</span>
@@ -706,6 +724,11 @@ export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProp
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null)
 
+  // ── Multi-select / bulk delete ────────────────────────────────────────
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmBulk, setConfirmBulk] = useState(false)
+
   // ── Data ──────────────────────────────────────────────────────────────
   const [historyData, setHistoryData] = useState<HistoryData>({
     schemaVersion: 1,
@@ -841,6 +864,29 @@ export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProp
     }
   }, [])
 
+  // ── Bulk delete ───────────────────────────────────────────────────────
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    setConfirmBulk(false)
+  }, [])
+
+  const handleBulkDelete = useCallback(() => {
+    for (const id of selectedIds) deleteHistoryEntry(id)
+    const result = loadHistory()
+    if (result.ok) setHistoryData(result.data)
+    exitSelectMode()
+  }, [selectedIds, exitSelectMode])
+
   // ── Manual override ───────────────────────────────────────────────────
   const handleUpdateOverride = useCallback((sessionId: string, override: ManualOverride): HistoryStorageError | null => {
     const err = updateManualOverride(sessionId, override)
@@ -966,7 +1012,7 @@ export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProp
                 <button
                   key={v}
                   className={`dash-tab ${view === v ? 'active' : ''}`}
-                  onClick={() => { setView(v); setSelectedEntry(null) }}
+                  onClick={() => { setView(v); setSelectedEntry(null); exitSelectMode() }}
                 >
                   {v === 'day' ? 'Day' : v === 'week' ? 'Week' : 'Month'}
                 </button>
@@ -1000,6 +1046,40 @@ export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProp
                 <option value="uncategorized">Uncategorized</option>
               </select>
             </div>
+            {/* Bulk-select actions (Day / Week only) */}
+            {mode === 'real' && (view === 'day' || view === 'week') && (
+              <div className="dash-bulk-bar">
+                {!selectMode ? (
+                  <button className="btn btn-ghost btn-small" onClick={() => setSelectMode(true)}>
+                    Select
+                  </button>
+                ) : !confirmBulk ? (
+                  <>
+                    <span className="dash-select-count">{selectedIds.size} selected</span>
+                    <button
+                      className="btn btn-danger btn-small"
+                      disabled={selectedIds.size === 0}
+                      onClick={() => setConfirmBulk(true)}
+                    >
+                      Delete
+                    </button>
+                    <button className="btn btn-ghost btn-small" onClick={exitSelectMode}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="dash-select-count">Delete {selectedIds.size} session{selectedIds.size !== 1 ? 's' : ''}?</span>
+                    <button className="btn btn-danger btn-small" onClick={handleBulkDelete}>
+                      Confirm
+                    </button>
+                    <button className="btn btn-ghost btn-small" onClick={() => setConfirmBulk(false)}>
+                      Back
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Summary */}
@@ -1012,6 +1092,9 @@ export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProp
                 date={focusDate}
                 entries={byDay.get(focusDate) ?? []}
                 onSelectEntry={handleSelectEntry}
+                selectMode={selectMode}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
               />
             )}
             {view === 'week' && (
@@ -1020,6 +1103,9 @@ export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProp
                 byDay={byDay}
                 onSelectDay={handleSelectDay}
                 onSelectEntry={handleSelectEntry}
+                selectMode={selectMode}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
               />
             )}
             {view === 'month' && (

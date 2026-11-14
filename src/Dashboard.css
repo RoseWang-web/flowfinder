@@ -1279,3 +1279,56 @@
   .detail-timeline,
   .detail-event-list { max-height: none !important; overflow: visible !important; }
 }
+
+/* ── Bulk select ──────────────────────────────────────────────────────────── */
+
+.dash-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-select-count {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.btn-danger {
+  background: #C8553D;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-danger:not(:disabled):hover { background: #a84433; }
+.btn-danger:disabled { background: #e5e7eb; color: #9ca3af; cursor: default; }
+
+/* Selected session block */
+.cal-blk-selected {
+  outline: 2.5px solid #2F4D6B !important;
+  outline-offset: -2px;
+  opacity: 0.85;
+}
+
+.cal-blk-check {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2F4D6B;
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+  font-weight: 700;
+}
