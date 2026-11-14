@@ -66,6 +66,8 @@ export interface SessionUIState {
   remainingMs: number
   /** 0 = unlimited. Consumers check this to switch between countdown and elapsed display. */
   plannedDurationMs: number
+  /** True when timer just hit 0 and user must choose Keep Going or End. */
+  overtimePending: boolean
   session: Session | null
   storageError: StorageError | null
   checkInPending: boolean
@@ -80,6 +82,10 @@ export interface SessionActions {
   resetToIdle: () => void
   answerCheckIn: (answer: CheckInAnswer) => void
   skipCheckIn: () => void
+  /** Continue the session beyond planned duration (from overtime prompt). */
+  keepGoing: () => void
+  /** End the session at the planned duration (from overtime prompt). */
+  stopNow: () => void
   deleteData: () => void
   recordEvent: (type: EventType, data?: Record<string, unknown>) => void
   getActiveReadingMs: () => number
@@ -92,6 +98,7 @@ export function useSession(): SessionUIState & SessionActions {
   const [storageError, setStorageError] = useState<StorageError | null>(null)
   const [remainingMs, setRemainingMs] = useState(READING_DURATION_MS)
   const [checkInPending, setCheckInPending] = useState(false)
+  const [overtimePending, setOvertimePending] = useState(false)
   // True when localStorage holds a completed session (survives resetToIdle)
   const [hasStoredData, setHasStoredData] = useState(false)
 
@@ -109,6 +116,8 @@ export function useSession(): SessionUIState & SessionActions {
   const checkInShownRef = useRef(false)
   // Ref mirror of checkInPending — lets answerCheckIn/skipCheckIn guard without stale closure
   const checkInPendingRef = useRef(false)
+  // Ref mirror of overtimePending — lets keepGoing/stopNow guard without stale closure
+  const overtimePendingRef = useRef(false)
   // pending visibility change to show check-in after returning to visible
   const deferredCheckInRef = useRef(false)
 
@@ -255,15 +264,35 @@ export function useSession(): SessionUIState & SessionActions {
         return
       }
 
-      if (!isUnlimited && remaining <= 0) {
-        complete('time_up', planned)
-      } else if (!isUnlimited) {
+      const isOvertime = sessionRef.current?.status === 'overtime'
+
+      if (!isUnlimited && !isOvertime && remaining <= 0) {
+        // Snapshot accumulated ms at the overtime point (mirrors check-in pattern)
+        const overtimeNow = Date.now()
+        const snappedActive = accumulatedMsRef.current + (overtimeNow - (segmentStartRef.current ?? overtimeNow))
+        accumulatedMsRef.current = snappedActive
+        segmentStartRef.current = null
+        // Freeze at 0 and show overtime prompt
+        clearTick()
+        clearSaveInterval()
+        setRemainingMs(0)
+        overtimePendingRef.current = true
+        setOvertimePending(true)
+        setSession(prev => {
+          if (!prev) return prev
+          const next: Session = { ...prev, status: 'overtime', activeReadingMs: snappedActive }
+          sessionRef.current = next
+          return next
+        })
+      } else if (!isUnlimited && !isOvertime) {
         setRemainingMs(remaining)
+      } else if (isOvertime) {
+        setRemainingMs(activeMs - planned)   // overtime: elapsed beyond planned
       } else {
         setRemainingMs(activeMs)   // unlimited: expose elapsed as remainingMs
       }
     }, 250)
-  }, [clearTick, clearSaveInterval, complete, persistSession])
+  }, [clearTick, clearSaveInterval, complete, persistSession, setOvertimePending])
 
   // ── Auto-save interval ────────────────────────────────────────────────
   const startSaveInterval = useCallback(() => {
@@ -466,6 +495,7 @@ export function useSession(): SessionUIState & SessionActions {
     completedRef.current = false
     checkInShownRef.current = false
     checkInPendingRef.current = false
+    overtimePendingRef.current = false
     deferredCheckInRef.current = false
     accumulatedMsRef.current = 0
     segmentStartRef.current = null
@@ -549,9 +579,25 @@ export function useSession(): SessionUIState & SessionActions {
 
   const finish = useCallback(() => {
     const s = sessionRef.current
-    if (!s || (s.status !== 'running' && s.status !== 'paused')) return
+    if (!s || (s.status !== 'running' && s.status !== 'paused' && s.status !== 'overtime')) return
     const activeMs = getActiveReadingMs()
     complete('manual', activeMs)
+  }, [getActiveReadingMs, complete])
+
+  const keepGoing = useCallback(() => {
+    if (!overtimePendingRef.current) return
+    overtimePendingRef.current = false
+    setOvertimePending(false)
+    startTicking()
+    startSaveInterval()
+  }, [startTicking, startSaveInterval])
+
+  const stopNow = useCallback(() => {
+    if (!overtimePendingRef.current) return
+    overtimePendingRef.current = false
+    setOvertimePending(false)
+    const activeMs = getActiveReadingMs()
+    complete('time_up', activeMs)
   }, [getActiveReadingMs, complete])
 
   const answerCheckIn = useCallback(
@@ -609,6 +655,7 @@ export function useSession(): SessionUIState & SessionActions {
     completedRef.current = false
     checkInShownRef.current = false
     checkInPendingRef.current = false
+    overtimePendingRef.current = false
     deferredCheckInRef.current = false
     accumulatedMsRef.current = 0
     segmentStartRef.current = null
@@ -618,6 +665,7 @@ export function useSession(): SessionUIState & SessionActions {
     setSession(null)
     setRemainingMs(READING_DURATION_MS)
     setCheckInPending(false)
+    setOvertimePending(false)
   }, [clearTick, clearSaveInterval])
 
   const recordEvent = useCallback(
@@ -642,6 +690,7 @@ export function useSession(): SessionUIState & SessionActions {
     completedRef.current = false
     checkInShownRef.current = false
     checkInPendingRef.current = false
+    overtimePendingRef.current = false
     deferredCheckInRef.current = false
     accumulatedMsRef.current = 0
     segmentStartRef.current = null
@@ -650,6 +699,7 @@ export function useSession(): SessionUIState & SessionActions {
     setHasStoredData(false)
     setRemainingMs(READING_DURATION_MS)
     setCheckInPending(false)
+    setOvertimePending(false)
     // Show error if localStorage delete failed; clear previous errors otherwise
     setStorageError(clearErr ?? null)
   }, [clearTick, clearSaveInterval])
@@ -660,6 +710,7 @@ export function useSession(): SessionUIState & SessionActions {
     status,
     remainingMs,
     plannedDurationMs: session?.plannedDurationMs ?? 1_800_000,
+    overtimePending,
     session,
     storageError,
     checkInPending,
@@ -671,6 +722,8 @@ export function useSession(): SessionUIState & SessionActions {
     resetToIdle,
     answerCheckIn,
     skipCheckIn,
+    keepGoing,
+    stopNow,
     deleteData,
     recordEvent,
     getActiveReadingMs,

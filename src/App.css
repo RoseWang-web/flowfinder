@@ -315,6 +315,57 @@
   color: #374151;
 }
 
+/* ── Overtime dialog ── */
+.overtime-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.overtime-dialog {
+  background: #fff;
+  border-radius: 12px;
+  padding: 36px 32px;
+  max-width: 380px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+}
+
+.overtime-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #dc2626;
+  margin: 0;
+}
+
+.overtime-message {
+  font-size: 0.9375rem;
+  color: #374151;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.overtime-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+}
+
+/* Progress bar turns red during overtime */
+.progress-bar-fill.overtime-fill {
+  background: #dc2626;
+}
+
 /* ── Ghost / small buttons ── */
 .btn-ghost {
   background: transparent;

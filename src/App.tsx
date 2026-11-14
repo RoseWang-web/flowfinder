@@ -115,6 +115,7 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   running: { label: 'In Progress', color: '#16a34a' },
   paused: { label: 'Paused', color: '#d97706' },
   checking_in: { label: 'Checking In', color: '#7c3aed' },
+  overtime: { label: 'Overtime', color: '#dc2626' },
   completed: { label: 'Completed', color: '#6b7280' },
 }
 
@@ -150,6 +151,31 @@ function CheckInDialog({
   )
 }
 
+function OvertimeDialog({
+  onKeepGoing,
+  onStop,
+}: {
+  onKeepGoing: () => void
+  onStop: () => void
+}) {
+  return (
+    <div className="overtime-overlay">
+      <div className="overtime-dialog" role="dialog" aria-modal="true">
+        <p className="overtime-title">Time's up!</p>
+        <p className="overtime-message">You've reached your planned session duration. Keep going or end now?</p>
+        <div className="overtime-actions">
+          <button className="btn btn-primary" onClick={onKeepGoing}>
+            Keep Going
+          </button>
+          <button className="btn btn-danger" onClick={onStop}>
+            End Session
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main App ─────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -159,6 +185,7 @@ export default function App() {
     status,
     remainingMs,
     plannedDurationMs,
+    overtimePending,
     session,
     storageError,
     checkInPending,
@@ -170,6 +197,8 @@ export default function App() {
     resetToIdle,
     answerCheckIn,
     skipCheckIn,
+    keepGoing,
+    stopNow,
     deleteData,
     recordEvent,
     articleRef,
@@ -731,11 +760,12 @@ export default function App() {
     )
   }
 
-  // ── Reading / paused / checking_in ───────────────────────────────────
+  // ── Reading / paused / checking_in / overtime ───────────────────────
   const statusMeta = STATUS_META[status] ?? STATUS_META.running
   const isUnlimitedSession = plannedDurationMs === 0
-  const progressPct = isUnlimitedSession
-    ? 0
+  const isOvertimeRunning = status === 'overtime' && !overtimePending
+  const progressPct = (isUnlimitedSession || isOvertimeRunning)
+    ? 100
     : Math.min(100, ((plannedDurationMs - remainingMs) / plannedDurationMs) * 100)
 
   return (
@@ -743,6 +773,9 @@ export default function App() {
       {errorBanner}
       {checkInPending && (
         <CheckInDialog onAnswer={answerCheckIn} onSkip={skipCheckIn} />
+      )}
+      {overtimePending && (
+        <OvertimeDialog onKeepGoing={keepGoing} onStop={stopNow} />
       )}
       <header className="reading-header">
         <div className="header-top">
@@ -753,14 +786,16 @@ export default function App() {
           <div className="session-panel">
             <StatusBadge label={statusMeta.label} color={statusMeta.color} />
             <div className="timer-display">
-              {isUnlimitedSession
-                ? formatTime(Math.floor(remainingMs / 1000))
-                : formatTime(Math.ceil(remainingMs / 1000))}
+              {isOvertimeRunning
+                ? `+${formatTime(Math.floor(remainingMs / 1000))}`
+                : isUnlimitedSession
+                  ? formatTime(Math.floor(remainingMs / 1000))
+                  : formatTime(Math.ceil(remainingMs / 1000))}
             </div>
             {!isUnlimitedSession && (
               <div className="progress-bar-wrap">
                 <div
-                  className="progress-bar-fill"
+                  className="progress-bar-fill overtime-fill"
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
@@ -786,6 +821,11 @@ export default function App() {
                     End Session
                   </button>
                 </>
+              )}
+              {status === 'overtime' && !overtimePending && (
+                <button className="btn btn-danger" onClick={finish}>
+                  End Session
+                </button>
               )}
               {status === 'checking_in' && (
                 <span className="status-hint">Please answer the check-in first</span>

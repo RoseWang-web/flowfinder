@@ -106,7 +106,7 @@ describe('useSession — timers and check-in', () => {
   beforeEach(() => { vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers() })
 
-  test('time_up fires after full reading duration', async () => {
+  test('time_up triggers overtime prompt instead of completing immediately', async () => {
     const { result } = renderHook(() => useSession())
     act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
 
@@ -120,9 +120,9 @@ describe('useSession — timers and check-in', () => {
       vi.advanceTimersByTime(READING_DURATION_MS - CHECK_IN_THRESHOLD_MS + 500)
     })
 
-    expect(result.current.status).toBe('completed')
-    expect(result.current.session?.endReason).toBe('time_up')
-    expect(result.current.remainingMs).toBe(0)
+    expect(result.current.status).toBe('overtime')
+    expect(result.current.overtimePending).toBe(true)
+    expect(result.current.session?.endReason).toBeNull()
   })
 
   test('pausing stops effective time — session does NOT time out during pause', async () => {
@@ -238,6 +238,72 @@ describe('useSession — timers and check-in', () => {
     // Active reading should still be ~shownActiveReadingMs (not + 10s)
     const activeAfterAnswer = result.current.session?.activeReadingMs ?? 0
     expect(activeAfterAnswer).toBeCloseTo(activeAtCheckIn, -2) // within ~100ms
+  })
+})
+
+// ── Overtime ──────────────────────────────────────────────────────────────────
+
+describe('useSession — overtime', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  async function reachOvertime(result: { current: ReturnType<typeof useSession> }) {
+    act(() => { result.current.start({ plannedDurationMs: 120_000 }) })
+    await act(async () => { vi.advanceTimersByTime(CHECK_IN_THRESHOLD_MS + 500) })
+    act(() => { result.current.skipCheckIn() })
+    await act(async () => { vi.advanceTimersByTime(READING_DURATION_MS - CHECK_IN_THRESHOLD_MS + 500) })
+  }
+
+  test('stopNow from overtime prompt completes session with time_up', async () => {
+    const { result } = renderHook(() => useSession())
+    await reachOvertime(result)
+
+    expect(result.current.overtimePending).toBe(true)
+    act(() => { result.current.stopNow() })
+
+    expect(result.current.status).toBe('completed')
+    expect(result.current.session?.endReason).toBe('time_up')
+    expect(result.current.remainingMs).toBe(0)
+  })
+
+  test('keepGoing resumes session and timer counts up beyond planned duration', async () => {
+    const { result } = renderHook(() => useSession())
+    await reachOvertime(result)
+
+    expect(result.current.overtimePending).toBe(true)
+    act(() => { result.current.keepGoing() })
+
+    expect(result.current.status).toBe('overtime')
+    expect(result.current.overtimePending).toBe(false)
+
+    // Advance 10 more seconds — timer should count up (overtime elapsed > 0)
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+
+    expect(result.current.remainingMs).toBeGreaterThan(0)
+    expect(result.current.status).toBe('overtime')
+  })
+
+  test('finish from overtime running ends session with manual end reason', async () => {
+    const { result } = renderHook(() => useSession())
+    await reachOvertime(result)
+    act(() => { result.current.keepGoing() })
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+
+    act(() => { result.current.finish() })
+
+    expect(result.current.status).toBe('completed')
+    expect(result.current.session?.endReason).toBe('manual')
+  })
+
+  test('unlimited sessions never trigger overtime', async () => {
+    const { result } = renderHook(() => useSession())
+    act(() => { result.current.start({ plannedDurationMs: 0 }) })
+
+    // Advance far past any timed threshold
+    await act(async () => { vi.advanceTimersByTime(3_600_000) })
+
+    expect(result.current.status).not.toBe('overtime')
+    expect(result.current.overtimePending).toBe(false)
   })
 })
 

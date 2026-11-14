@@ -1,6 +1,6 @@
 export const SCHEMA_VERSION = 2
 
-export type SessionStatus = 'idle' | 'running' | 'paused' | 'checking_in' | 'completed'
+export type SessionStatus = 'idle' | 'running' | 'paused' | 'checking_in' | 'overtime' | 'completed'
 
 export type CategoryId = 'web_reading' | 'study_notes'
 
