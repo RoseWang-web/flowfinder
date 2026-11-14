@@ -747,9 +747,9 @@ export function Dashboard({ onStartNewSession, initialSessionId }: DashboardProp
   const filteredEntries = filterByCategory(allEntries, categoryFilter)
   const byDay = groupEntriesByDay(filteredEntries, tz)
 
-  // Auto-select entry when navigated via #session/{id}
+  // Auto-select entry when navigated via #session/{id}; clear when back at #dashboard
   useEffect(() => {
-    if (!initialSessionId) return
+    if (!initialSessionId) { setSelectedEntry(null); return }
     const entry = allEntries.find(e => e.session.sessionId === initialSessionId)
     if (entry) setSelectedEntry(entry)
   }, [initialSessionId, allEntries])

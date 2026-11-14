@@ -31,10 +31,10 @@ const FOCUS_MAX = 0.75
 const MAX_LINE_GAP_MS = 5_000
 
 const ATT_COLOUR = {
-  trend: '#2563eb',
-  window: '#93c5fd',
-  warming_up: '#d1d5db',
-  low_quality: '#fca5a5',
+  trend: '#2F4D6B',
+  window: '#9FB2C6',
+  warming_up: '#C9D3DE',
+  low_quality: '#B8B2A7',
 }
 
 const ATT_STATUS_LABEL: Record<AttentionPoint['status'], string> = {
@@ -46,15 +46,15 @@ const ATT_STATUS_LABEL: Record<AttentionPoint['status'], string> = {
 // ── Colour maps ───────────────────────────────────────────────────────────
 
 const SESSION_COLOUR: Record<string, string> = {
-  reading:     '#3b82f6',
-  paused:      '#f59e0b',
+  reading:     '#2F4D6B',
+  paused:      '#F6D37C',  // actual fill overridden to stripe pattern in render
   checking_in: '#8b5cf6',
   unknown:     '#e5e7eb',
 }
 
 const VISIBILITY_COLOUR: Record<string, string> = {
-  visible: '#93c5fd',
-  hidden:  '#6b7280',
+  visible: '#9FB2C6',
+  hidden:  '#ffffff',      // actual fill/stroke handled specially in render
   unknown: '#e5e7eb',
 }
 
@@ -78,18 +78,20 @@ type Selection =
 
 // ── Legend ────────────────────────────────────────────────────────────────
 
-const LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' }> = [
-  { label: 'Reading',      colour: '#3b82f6' },
-  { label: 'Paused',       colour: '#f59e0b' },
-  { label: 'Page visible', colour: '#93c5fd' },
-  { label: 'Page hidden',  colour: '#6b7280' },
+type LegendShape = 'line' | 'diamond' | 'dot' | 'diag-stripe' | 'v-stripe' | 'border-box'
+
+const LEGEND: Array<{ label: string; colour: string; bg?: string; shape?: LegendShape }> = [
+  { label: 'Reading',      colour: '#2F4D6B' },
+  { label: 'Paused',       colour: '#F6D37C', bg: '#FBEBC4', shape: 'diag-stripe' },
+  { label: 'Page visible', colour: '#9FB2C6' },
+  { label: 'Page hidden',  colour: '#9FB2C6', shape: 'border-box' },
 ]
 
-const GAZE_LEGEND: Array<{ label: string; colour: string; shape?: 'line' | 'diamond' | 'dot' }> = [
-  { label: 'Focus trend',      colour: ATT_COLOUR.trend, shape: 'line' },
-  { label: 'Single window',    colour: ATT_COLOUR.window, shape: 'dot' },
-  { label: 'Warming up',       colour: ATT_COLOUR.warming_up },
-  { label: 'Low gaze signal',  colour: ATT_COLOUR.low_quality },
+const GAZE_LEGEND: Array<{ label: string; colour: string; bg?: string; shape?: LegendShape }> = [
+  { label: 'Focus trend',      colour: '#2F4D6B', shape: 'line' },
+  { label: 'Single window',    colour: '#9FB2C6', shape: 'dot' },
+  { label: 'Warming up',       colour: '#C9D3DE', bg: '#E4E9EF', shape: 'v-stripe' },
+  { label: 'Low gaze signal',  colour: '#B8B2A7', bg: '#E4DFD6', shape: 'diag-stripe' },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -100,7 +102,11 @@ interface Props {
 
 export function TimelineChart({ data }: Props) {
   const [selection, setSelection] = useState<Selection | null>(null)
-  const hatchId = useId()
+  const baseId = useId()
+  const hatchId        = `${baseId}h`
+  const pausedHatchId  = `${baseId}p`
+  const warmingStripeId = `${baseId}w`
+  const lowQualHatchId = `${baseId}l`
 
   const { totalMs } = data
   if (totalMs < 1) return null
@@ -163,8 +169,24 @@ export function TimelineChart({ data }: Props) {
           style={{ display: 'block', userSelect: 'none' }}
         >
           <defs>
+            {/* Unknown segments: grey diagonal hatch */}
             <pattern id={hatchId} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <line x1="0" y1="0" x2="0" y2="6" stroke="#d1d5db" strokeWidth="2" />
+            </pattern>
+            {/* Paused: yellow diagonal stripes */}
+            <pattern id={pausedHatchId} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect width="8" height="8" fill="#FBEBC4" />
+              <line x1="0" y1="0" x2="0" y2="8" stroke="#F6D37C" strokeWidth="3.5" />
+            </pattern>
+            {/* Warming up: vertical blue-grey stripes */}
+            <pattern id={warmingStripeId} width="4" height="4" patternUnits="userSpaceOnUse">
+              <rect width="4" height="4" fill="#E4E9EF" />
+              <line x1="0" y1="0" x2="0" y2="4" stroke="#C9D3DE" strokeWidth="1.5" />
+            </pattern>
+            {/* Low gaze signal: warm-grey diagonal stripes */}
+            <pattern id={lowQualHatchId} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect width="4" height="4" fill="#E4DFD6" />
+              <line x1="0" y1="0" x2="0" y2="4" stroke="#B8B2A7" strokeWidth="1.5" />
             </pattern>
           </defs>
 
@@ -217,13 +239,17 @@ export function TimelineChart({ data }: Props) {
                   const x1 = tx(seg.startMs)
                   const x2 = tx(seg.endMs)
                   const w = Math.max(x2 - x1, 1)
-                  const fill = seg.kind === 'unknown'
-                    ? `url(#${hatchId})`
-                    : (track.colorMap[seg.kind] ?? '#e5e7eb')
+                  const fill =
+                    seg.kind === 'unknown' ? `url(#${hatchId})` :
+                    seg.kind === 'paused'  ? `url(#${pausedHatchId})` :
+                    seg.kind === 'hidden'  ? '#ffffff' :
+                    (track.colorMap[seg.kind] ?? '#e5e7eb')
                   const isSelected =
                     selection?.kind === 'segment' &&
                     selection.track === track.id &&
                     selection.seg === seg
+                  const segStroke    = isSelected ? '#1d4ed8' : seg.kind === 'hidden' ? '#9FB2C6' : 'none'
+                  const segStrokeW   = isSelected ? 2 : seg.kind === 'hidden' ? 1.5 : 0
 
                   return (
                     <rect
@@ -231,8 +257,8 @@ export function TimelineChart({ data }: Props) {
                       x={x1} y={y + 1} width={w} height={TRACK_H - 2}
                       fill={fill}
                       rx={2}
-                      stroke={isSelected ? '#1d4ed8' : 'none'}
-                      strokeWidth={isSelected ? 2 : 0}
+                      stroke={segStroke}
+                      strokeWidth={segStrokeW}
                       style={{ cursor: 'pointer', outline: 'none' }}
                       tabIndex={0}
                       role="button"
@@ -264,26 +290,51 @@ export function TimelineChart({ data }: Props) {
                 x1={LABEL_W} y1={focusY(0.5)} x2={LABEL_W + TL_W} y2={focusY(0.5)}
                 stroke="#e5e7eb" strokeWidth={1} strokeDasharray="4 3"
               />
-              {/* Windows without a score: small bars at the bottom */}
-              {data.attentionTrack.filter(p => p.status !== 'ok').map((p, i) => (
+              {/* Warming up: vertical-stripe bar at top of Focus area */}
+              {data.attentionTrack.filter(p => p.status === 'warming_up').map((p, i) => (
                 <rect
-                  key={`na-${i}`}
-                  x={tx(p.ms) - 2} y={ATT_Y + ATT_H - 5} width={4} height={4}
-                  fill={ATT_COLOUR[p.status as 'warming_up' | 'low_quality']}
+                  key={`wu-${i}`}
+                  x={tx(p.ms) - 2.5} y={ATT_Y + 1} width={5} height={9}
+                  fill={`url(#${warmingStripeId})`}
                   style={{ cursor: 'pointer' }}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Focus: ${ATT_STATUS_LABEL[p.status]}, ${fmtMs(p.ms)}`}
+                  aria-label={`Focus: ${ATT_STATUS_LABEL['warming_up']}, ${fmtMs(p.ms)}`}
                   onClick={() => selectAttention(p)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAttention(p) } }}
                 />
               ))}
+              {/* Low gaze signal: diagonal-stripe bar at bottom of Focus area */}
+              {data.attentionTrack.filter(p => p.status === 'low_quality').map((p, i) => (
+                <rect
+                  key={`lq-${i}`}
+                  x={tx(p.ms) - 2.5} y={ATT_Y + ATT_H - 7} width={5} height={6}
+                  fill={`url(#${lowQualHatchId})`}
+                  style={{ cursor: 'pointer' }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Focus: ${ATT_STATUS_LABEL['low_quality']}, ${fmtMs(p.ms)}`}
+                  onClick={() => selectAttention(p)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAttention(p) } }}
+                />
+              ))}
+              {/* Area fill below trend (8% opacity) */}
+              {trendRuns.map((run, ri) => {
+                if (run.length < 2) return null
+                const pts = run.map(p => `${tx(p.ms)},${focusY(p.trend as number)}`).join(' ')
+                const br = `${tx(run[run.length - 1].ms)},${ATT_Y + ATT_H}`
+                const bl = `${tx(run[0].ms)},${ATT_Y + ATT_H}`
+                return (
+                  <polygon key={`area-${ri}`} points={`${pts} ${br} ${bl}`}
+                    fill={ATT_COLOUR.trend} fillOpacity={0.08} stroke="none" />
+                )
+              })}
               {/* Trend line */}
               {trendRuns.map((run, ri) => (
                 <polyline
                   key={`run-${ri}`}
                   points={run.map(p => `${tx(p.ms)},${focusY(p.trend as number)}`).join(' ')}
-                  fill="none" stroke={ATT_COLOUR.trend} strokeWidth={2} strokeLinejoin="round"
+                  fill="none" stroke={ATT_COLOUR.trend} strokeWidth={2.25} strokeLinejoin="round"
                 />
               ))}
               {/* Single-window scores (noisy) */}
@@ -351,22 +402,49 @@ export function TimelineChart({ data }: Props) {
 
       {/* ── Legend ── */}
       <div className="timeline-legend" aria-label="Legend">
-        {legend.map(item => (
-          <span key={item.label} className="tl-legend-item">
-            {item.shape === 'dot' ? (
-              <span className="tl-legend-swatch" style={{ background: item.colour, borderRadius: '50%' }} />
-            ) : item.shape === 'line' ? (
-              <span className="tl-legend-line" style={{ background: item.colour }} />
-            ) : item.shape === 'diamond' ? (
-              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ flexShrink: 0 }}>
-                <polygon points="6,1 11,6 6,11 1,6" fill={item.colour} stroke="rgba(0,0,0,0.12)" strokeWidth="0.8" />
-              </svg>
-            ) : (
-              <span className="tl-legend-swatch" style={{ background: item.colour }} />
-            )}
-            {item.label}
-          </span>
-        ))}
+        {legend.map((item, li) => {
+          const legPatId = `${baseId}leg${li}`
+          return (
+            <span key={item.label} className="tl-legend-item">
+              {item.shape === 'dot' ? (
+                <span className="tl-legend-swatch" style={{ background: item.colour, borderRadius: '50%' }} />
+              ) : item.shape === 'line' ? (
+                <span className="tl-legend-line" style={{ background: item.colour }} />
+              ) : item.shape === 'diamond' ? (
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <polygon points="6,1 11,6 6,11 1,6" fill={item.colour} stroke="rgba(0,0,0,0.12)" strokeWidth="0.8" />
+                </svg>
+              ) : item.shape === 'diag-stripe' ? (
+                <svg width="12" height="12" aria-hidden="true" style={{ flexShrink: 0, borderRadius: 2, overflow: 'hidden' }}>
+                  <defs>
+                    <pattern id={legPatId} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                      <rect width="5" height="5" fill={item.bg} />
+                      <line x1="0" y1="0" x2="0" y2="5" stroke={item.colour} strokeWidth="2" />
+                    </pattern>
+                  </defs>
+                  <rect width="12" height="12" fill={`url(#${legPatId})`} />
+                </svg>
+              ) : item.shape === 'v-stripe' ? (
+                <svg width="12" height="12" aria-hidden="true" style={{ flexShrink: 0, borderRadius: 2, overflow: 'hidden' }}>
+                  <defs>
+                    <pattern id={legPatId} width="4" height="4" patternUnits="userSpaceOnUse">
+                      <rect width="4" height="4" fill={item.bg} />
+                      <line x1="0" y1="0" x2="0" y2="4" stroke={item.colour} strokeWidth="1.5" />
+                    </pattern>
+                  </defs>
+                  <rect width="12" height="12" fill={`url(#${legPatId})`} />
+                </svg>
+              ) : item.shape === 'border-box' ? (
+                <svg width="12" height="12" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <rect x="1" y="1" width="10" height="10" fill="white" stroke={item.colour} strokeWidth="1.5" rx="1" />
+                </svg>
+              ) : (
+                <span className="tl-legend-swatch" style={{ background: item.colour }} />
+              )}
+              {item.label}
+            </span>
+          )
+        })}
       </div>
 
       {/* ── Stat summary ── */}
