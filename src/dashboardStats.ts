@@ -261,7 +261,7 @@ export function msToHHMM(ms: number): string {
 
 export function formatScore(score: number | null): string {
   if (!isValidScore(score)) return '—'
-  return Math.round(score as number).toString()
+  return `${Math.round(score as number)}%`
 }
 
 export function localTimeString(ts: number, tz = browserTz()): string {

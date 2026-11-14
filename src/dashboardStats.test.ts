@@ -379,7 +379,7 @@ describe('msToHHMM', () => {
 // ── formatScore ───────────────────────────────────────────────────────────────
 
 describe('formatScore', () => {
-  it('rounds to nearest integer', () => expect(formatScore(75.6)).toBe('76'))
-  it('formats 0 as "0" not "—"', () => expect(formatScore(0)).toBe('0'))
+  it('rounds to nearest integer and appends %', () => expect(formatScore(75.6)).toBe('76%'))
+  it('formats 0 as "0%" not "—"', () => expect(formatScore(0)).toBe('0%'))
   it('returns "—" for null', () => expect(formatScore(null)).toBe('—'))
 })

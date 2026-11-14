@@ -30,7 +30,7 @@ import {
   getDefaultRules,
 } from './taskPreferences'
 import { upsertHistoryEntry } from './historyStorage'
-import { makePendingAnalysis } from './analysisTypes'
+import { computeSessionAnalysis } from './sessionAnalysis'
 import { Dashboard } from './Dashboard'
 import './App.css'
 
@@ -211,12 +211,12 @@ export default function App() {
   const [draft, setDraft] = useState<TaskRules>(() => loadRulesOrDefault('web_reading'))
   const [prefMsg, setPrefMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Save completed session to multi-session history
+  // Save completed session to multi-session history with computed analysis
   useEffect(() => {
     if (status === 'completed' && session !== null) {
       upsertHistoryEntry({
         session,
-        analysis: makePendingAnalysis(session.sessionId),
+        analysis: computeSessionAnalysis(session),
         entryVersion: 1,
       })
     }

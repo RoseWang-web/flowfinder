@@ -60,12 +60,12 @@ function categoryLabel(categoryId: string | undefined): string {
 
 function ScoreBadge({ score, size = 'sm' }: { score: number | null; size?: 'sm' | 'md' }) {
   const color = scoreToColor(score)
-  const display = isValidScore(score) ? String(Math.round(score as number)) : '—'
+  const display = isValidScore(score) ? `${Math.round(score as number)}%` : '—'
   return (
     <span
       className={`score-badge score-badge-${size}`}
       style={{ background: color.bg, color: color.text }}
-      aria-label={`分數 ${display}`}
+      aria-label={`專注度 ${display}`}
     >
       {display}
     </span>
@@ -387,7 +387,7 @@ function MonthView({
                   />
                 )}
                 {hasData && isValidScore(avg) && (
-                  <span className="month-day-score">{Math.round(avg as number)}</span>
+                  <span className="month-day-score">{Math.round(avg as number)}%</span>
                 )}
               </button>
             )
@@ -425,12 +425,12 @@ function SummaryBar({ entries }: { entries: HistoryEntry[] }) {
             className="summary-stat-value summary-avg-score"
             style={{ color: color.bg }}
           >
-            {Math.round(avg as number)}
+            {Math.round(avg as number)}%
           </span>
         ) : (
           <span className="summary-stat-value summary-avg-score summary-avg-none">—</span>
         )}
-        <span className="summary-stat-label">加權平均</span>
+        <span className="summary-stat-label">加權平均專注度</span>
       </div>
     </div>
   )
