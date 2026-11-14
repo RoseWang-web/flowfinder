@@ -6,6 +6,7 @@ import {
   isEligibleForAverage,
   computeWeightedAverage,
   getEffectiveScore,
+  validateScoreInput,
   localDateString,
   addDays,
   todayString,
@@ -497,5 +498,40 @@ describe('computeWeightedAverage with manual overrides', () => {
       manualOverride: { score: 50, overriddenAt: 1 },
     }
     expect(computeWeightedAverage([a, b])).toBeCloseTo(60, 5)
+  })
+})
+
+// ── validateScoreInput ────────────────────────────────────────────────────────
+
+describe('validateScoreInput', () => {
+  it('returns error for empty string', () => {
+    expect(typeof validateScoreInput('')).toBe('string')
+  })
+  it('returns error for whitespace-only string', () => {
+    expect(typeof validateScoreInput('  ')).toBe('string')
+  })
+  it('returns error for non-numeric string', () => {
+    expect(typeof validateScoreInput('abc')).toBe('string')
+  })
+  it('returns error for decimal', () => {
+    expect(typeof validateScoreInput('50.5')).toBe('string')
+  })
+  it('returns error for negative', () => {
+    expect(typeof validateScoreInput('-1')).toBe('string')
+  })
+  it('returns error for over 100', () => {
+    expect(typeof validateScoreInput('101')).toBe('string')
+  })
+  it('returns 0 for "0" — 0 is valid', () => {
+    expect(validateScoreInput('0')).toBe(0)
+  })
+  it('returns 100 for "100"', () => {
+    expect(validateScoreInput('100')).toBe(100)
+  })
+  it('returns number for valid mid-range score', () => {
+    expect(validateScoreInput('75')).toBe(75)
+  })
+  it('trims leading and trailing whitespace', () => {
+    expect(validateScoreInput('  50  ')).toBe(50)
   })
 })

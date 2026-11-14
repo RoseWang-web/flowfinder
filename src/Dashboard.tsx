@@ -4,10 +4,13 @@ import { buildTimeline } from './timeline'
 import {
   loadHistory,
   deleteHistoryEntry,
+  updateManualOverride,
+  clearManualOverride,
   type HistoryData,
   type HistoryEntry,
   type HistoryStorageError,
 } from './historyStorage'
+import type { ManualOverride } from './analysisTypes'
 import { getMockHistoryData } from './mockFixtures'
 import {
   scoreToColor,
@@ -28,6 +31,8 @@ import {
   todayString,
   addDays,
   parseYM,
+  getEffectiveScore,
+  validateScoreInput,
   type CategoryFilter,
   NEUTRAL_COLOR,
 } from './dashboardStats'
@@ -74,15 +79,23 @@ function ScoreBadge({ score, size = 'sm' }: { score: number | null; size?: 'sm' 
 
 // ── Session detail panel ──────────────────────────────────────────────────────
 
+const GRADE_LABELS: Record<'green' | 'yellow' | 'orange' | 'red', string> = {
+  green: '優秀', yellow: '良好', orange: '普通', red: '偏低',
+}
+
 function SessionDetail({
   entry,
   onClose,
   onDelete,
+  onUpdateOverride,
+  onClearOverride,
   isDemo,
 }: {
   entry: HistoryEntry
   onClose: () => void
   onDelete: (sessionId: string) => void
+  onUpdateOverride: (sessionId: string, override: ManualOverride) => HistoryStorageError | null
+  onClearOverride: (sessionId: string) => HistoryStorageError | null
   isDemo: boolean
 }) {
   const { session, analysis } = entry
@@ -90,8 +103,58 @@ function SessionDetail({
   const [showTimeline, setShowTimeline] = useState(false)
   const [showEvents, setShowEvents] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const color = scoreToColor(analysis.totalScore)
+  const [editing, setEditing] = useState(false)
+  const [draftScore, setDraftScore] = useState('')
+  const [draftReason, setDraftReason] = useState('')
+  const [scoreError, setScoreError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const effectiveScore = getEffectiveScore(entry)
+  const color = scoreToColor(effectiveScore)
   const timelineData = buildTimeline(session)
+
+  function handleOpenEdit() {
+    if (entry.manualOverride !== undefined) {
+      setDraftScore(String(entry.manualOverride.score))
+      setDraftReason(entry.manualOverride.reason ?? '')
+    } else if (isValidScore(analysis.totalScore)) {
+      setDraftScore(String(Math.round(analysis.totalScore as number)))
+      setDraftReason('')
+    } else {
+      setDraftScore('')
+      setDraftReason('')
+    }
+    setScoreError(null)
+    setSaveError(null)
+    setEditing(true)
+  }
+
+  function handleSave() {
+    const result = validateScoreInput(draftScore)
+    if (typeof result === 'string') {
+      setScoreError(result)
+      return
+    }
+    const override: ManualOverride = {
+      score: result,
+      overriddenAt: Date.now(),
+      ...(draftReason.trim() ? { reason: draftReason.trim() } : {}),
+    }
+    const err = onUpdateOverride(session.sessionId, override)
+    if (err) {
+      setSaveError(err.message)
+      return
+    }
+    setEditing(false)
+    setSaveError(null)
+  }
+
+  function handleRestore() {
+    const err = onClearOverride(session.sessionId)
+    if (err) {
+      setSaveError(err.message)
+    }
+  }
 
   return (
     <div className="detail-panel" role="dialog" aria-modal="true" aria-label="閱讀場次詳情">
@@ -102,16 +165,17 @@ function SessionDetail({
 
       {/* Score hero */}
       <div className="detail-score-hero" style={{ background: color.light, borderColor: color.bg }}>
-        <ScoreBadge score={analysis.totalScore} size="md" />
+        <div className="detail-score-hero-top">
+          <ScoreBadge score={effectiveScore} size="md" />
+          {entry.manualOverride !== undefined && (
+            <span className="manual-modified-badge">已手動修改</span>
+          )}
+        </div>
         <div className="detail-score-info">
-          {isValidScore(analysis.totalScore) ? (
+          {isValidScore(effectiveScore) ? (
             <>
-              <span className="detail-score-grade">
-                {['green','yellow','orange','red'].includes(scoreToGrade(analysis.totalScore as number))
-                  ? (['優秀','良好','普通','偏低'] as const)[['green','yellow','orange','red'].indexOf(scoreToGrade(analysis.totalScore as number))]
-                  : ''}
-              </span>
-              {analysis.summary && (
+              <span className="detail-score-grade">{GRADE_LABELS[scoreToGrade(effectiveScore as number)]}</span>
+              {analysis.summary && entry.manualOverride === undefined && (
                 <p className="detail-score-summary">{analysis.summary}</p>
               )}
             </>
@@ -120,6 +184,24 @@ function SessionDetail({
           )}
         </div>
       </div>
+
+      {/* Manual override info */}
+      {entry.manualOverride !== undefined && (
+        <div className="system-score-row">
+          <div className="system-score-line">
+            <span className="system-score-label">系統原始分數：</span>
+            <span className="system-score-value">
+              {isValidScore(analysis.totalScore) ? `${Math.round(analysis.totalScore as number)}%` : '尚無系統評分'}
+            </span>
+          </div>
+          <div className="system-score-meta">
+            <span>修改時間：{localDateTimeString(entry.manualOverride.overriddenAt, tz)}</span>
+            {entry.manualOverride.reason && (
+              <span>原因：{entry.manualOverride.reason}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {analysis.source === 'mock' && (
         <p className="detail-mock-note">⚠ 示範資料，非真實分析</p>
@@ -202,6 +284,51 @@ function SessionDetail({
         </div>
       )}
 
+      {/* Manual override controls */}
+      {isDemo ? (
+        <p className="detail-demo-note">示範資料不可修改</p>
+      ) : editing ? (
+        <div className="edit-form">
+          <div className="edit-form-row">
+            <label htmlFor="edit-score-input" className="edit-form-label">評分（0–100）</label>
+            <input
+              id="edit-score-input"
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              className="edit-score-input"
+              value={draftScore}
+              onChange={e => { setDraftScore(e.target.value); setScoreError(null) }}
+            />
+          </div>
+          {scoreError && <p className="edit-score-error">{scoreError}</p>}
+          <div className="edit-form-row">
+            <label htmlFor="edit-reason-input" className="edit-form-label">原因（選填，最多 300 字）</label>
+            <textarea
+              id="edit-reason-input"
+              className="edit-reason-input"
+              maxLength={300}
+              value={draftReason}
+              onChange={e => setDraftReason(e.target.value)}
+              rows={2}
+            />
+          </div>
+          {saveError && <p className="edit-save-error">⚠ {saveError}</p>}
+          <div className="edit-form-buttons">
+            <button className="btn btn-primary btn-small" onClick={handleSave}>儲存</button>
+            <button className="btn btn-ghost btn-small" onClick={() => { setEditing(false); setSaveError(null) }}>取消</button>
+          </div>
+        </div>
+      ) : (
+        <div className="detail-override-controls">
+          <button className="btn btn-secondary btn-small" onClick={handleOpenEdit}>修改評分</button>
+          {entry.manualOverride !== undefined && (
+            <button className="btn btn-ghost btn-small" onClick={handleRestore}>恢復系統評分</button>
+          )}
+        </div>
+      )}
+
       {/* Delete */}
       {!isDemo && (
         <div className="detail-delete">
@@ -257,15 +384,16 @@ function DayView({
   return (
     <div className="day-view">
       {sorted.map(entry => {
-        const { session, analysis } = entry
-        const color = scoreToColor(analysis.totalScore)
+        const { session } = entry
+        const effectiveScore = getEffectiveScore(entry)
+        const color = scoreToColor(effectiveScore)
         return (
           <button
             key={session.sessionId}
             className="day-session-card"
             style={{ borderLeftColor: color.bg }}
             onClick={() => onSelectEntry(entry)}
-            aria-label={`場次 ${localTimeString(session.startedAt, tz)}, 分數 ${formatScore(analysis.totalScore)}`}
+            aria-label={`場次 ${localTimeString(session.startedAt, tz)}, 分數 ${formatScore(effectiveScore)}`}
           >
             <div className="day-session-time">
               <span>{localTimeString(session.startedAt, tz)}</span>
@@ -277,7 +405,7 @@ function DayView({
               <span className="day-session-cat">{categoryLabel(session.taskSettings?.categoryId)}</span>
               <span className="day-session-active">{msToHHMM(session.activeReadingMs)}</span>
             </div>
-            <ScoreBadge score={analysis.totalScore} />
+            <ScoreBadge score={effectiveScore} />
           </button>
         )
       })}
@@ -555,6 +683,31 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
     setSelectedEntry(null)
   }, [])
 
+  // ── Manual override ───────────────────────────────────────────────────
+  const handleUpdateOverride = useCallback((sessionId: string, override: ManualOverride): HistoryStorageError | null => {
+    const err = updateManualOverride(sessionId, override)
+    if (err) return err
+    const result = loadHistory()
+    if (result.ok) {
+      setHistoryData(result.data)
+      const updated = result.data.entries.find(e => e.session.sessionId === sessionId)
+      if (updated) setSelectedEntry(updated)
+    }
+    return null
+  }, [])
+
+  const handleClearOverride = useCallback((sessionId: string): HistoryStorageError | null => {
+    const err = clearManualOverride(sessionId)
+    if (err) return err
+    const result = loadHistory()
+    if (result.ok) {
+      setHistoryData(result.data)
+      const updated = result.data.entries.find(e => e.session.sessionId === sessionId)
+      if (updated) setSelectedEntry(updated)
+    }
+    return null
+  }, [])
+
   // ── Period label ──────────────────────────────────────────────────────
   const periodLabel = (() => {
     if (view === 'day') {
@@ -708,6 +861,8 @@ export function Dashboard({ onStartNewSession }: DashboardProps) {
                 entry={selectedEntry}
                 onClose={() => setSelectedEntry(null)}
                 onDelete={handleDelete}
+                onUpdateOverride={handleUpdateOverride}
+                onClearOverride={handleClearOverride}
                 isDemo={mode === 'demo'}
               />
             </div>

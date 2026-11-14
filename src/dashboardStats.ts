@@ -37,6 +37,20 @@ export function scoreToColor(score: number | null): { bg: string; text: string; 
   return GRADE_COLORS[scoreToGrade(score as number)]
 }
 
+/**
+ * Validates a raw string from the manual-override score input.
+ * Returns the parsed integer on success, or a user-facing error string.
+ */
+export function validateScoreInput(raw: string): number | string {
+  const trimmed = raw.trim()
+  if (trimmed === '') return '請輸入分數'
+  const n = Number(trimmed)
+  if (!isFinite(n) || isNaN(n)) return '請輸入有效數字'
+  if (!Number.isInteger(n)) return '分數必須為整數'
+  if (n < 0 || n > 100) return '分數必須介於 0 到 100 之間'
+  return n
+}
+
 /** Validates that a score is a finite number in [0, 100]. */
 export function isValidScore(score: number | null | undefined): score is number {
   if (score === null || score === undefined) return false
