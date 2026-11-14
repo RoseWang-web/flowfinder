@@ -29,6 +29,9 @@ import {
   clearTaskPreferences,
   getDefaultRules,
 } from './taskPreferences'
+import { upsertHistoryEntry } from './historyStorage'
+import { makePendingAnalysis } from './analysisTypes'
+import { Dashboard } from './Dashboard'
 import './App.css'
 
 // ── Task rule definitions ────────────────────────────────────────────────
@@ -152,6 +155,8 @@ function CheckInDialog({
 // ── Main App ─────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [appView, setAppView] = useState<'reading' | 'dashboard'>('reading')
+
   const {
     status,
     remainingMs,
@@ -205,6 +210,17 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('web_reading')
   const [draft, setDraft] = useState<TaskRules>(() => loadRulesOrDefault('web_reading'))
   const [prefMsg, setPrefMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Save completed session to multi-session history
+  useEffect(() => {
+    if (status === 'completed' && session !== null) {
+      upsertHistoryEntry({
+        session,
+        analysis: makePendingAnalysis(session.sessionId),
+        entryVersion: 1,
+      })
+    }
+  }, [status, session])
 
   // Draw landmark overlay onto the small video canvas.
   // Must account for object-fit:cover: landmarks are in raw video coordinates,
@@ -268,6 +284,18 @@ export default function App() {
       ctx.fill()
     }
   }, [landmarkFrameSeq, devPanelOpen, cameraStatus, latestLandmarkFrameRef, videoRef])
+
+  // ── Dashboard view (all hooks above, conditional render here) ────────
+  if (appView === 'dashboard') {
+    return (
+      <Dashboard
+        onStartNewSession={() => {
+          setAppView('reading')
+          if (status !== 'idle') resetToIdle()
+        }}
+      />
+    )
+  }
 
   // ── Storage error banner ─────────────────────────────────────────────
   const errorBanner = storageError ? (
@@ -632,6 +660,9 @@ export default function App() {
             <button className="btn btn-primary" onClick={() => { resetToIdle(); }}>
               開始新一次
             </button>
+            <button className="btn btn-secondary btn-small" onClick={() => setAppView('dashboard')}>
+              查看紀錄
+            </button>
             <button className="btn btn-ghost btn-small" onClick={deleteData}>
               刪除本次資料
             </button>
@@ -700,6 +731,9 @@ export default function App() {
             <div className="session-panel">
               <StatusBadge label="未開始" color="#6b7280" />
               <div className="timer-display">{formatTime(READING_DURATION_MS / 1000)}</div>
+              <button className="btn btn-ghost btn-small" onClick={() => setAppView('dashboard')}>
+                查看紀錄
+              </button>
               {hasStoredData && (
                 <button className="btn btn-ghost btn-small" onClick={deleteData}>
                   刪除資料
