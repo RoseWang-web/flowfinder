@@ -1,0 +1,13 @@
+body { background: #EDE6DA; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+.card {
+  background: var(--cream); border: 1.5px solid var(--ink); border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(31, 46, 63, .18); padding: 28px 32px; width: 480px; max-width: 100%;
+}
+.card .brand { font-size: 22px; }
+.card h1 { font-size: 28px; margin: 12px 0 8px; }
+.card p { font-size: 15px; line-height: 1.55; margin: 0 0 12px; }
+.facts { margin: 0 0 20px; padding-left: 20px; font-size: 14px; line-height: 1.7; color: var(--muted); }
+#grant { font-size: 15px; padding: 11px 20px; }
+#status { margin: 14px 0 0; font-size: 14px; font-weight: 600; min-height: 20px; }
+#status.ok { color: var(--olive); }
+#status.error { color: var(--red); }
