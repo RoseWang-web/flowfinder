@@ -34,6 +34,19 @@ export interface AnalysisResult {
   analyzedAt: number | null
 }
 
+/**
+ * User-supplied score correction stored alongside the system analysis.
+ * Does NOT overwrite AnalysisResult; always separate.
+ */
+export interface ManualOverride {
+  /** Integer in [0, 100]. */
+  score: number
+  /** Optional explanation, ≤ 300 chars. */
+  reason?: string
+  /** Unix ms when the override was saved. */
+  overriddenAt: number
+}
+
 /** Attach to new real sessions that have not been analysed yet. */
 export function makePendingAnalysis(sessionId: string): AnalysisResult {
   return {

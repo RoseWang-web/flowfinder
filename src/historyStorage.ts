@@ -14,7 +14,7 @@
  */
 
 import type { Session } from './types'
-import type { AnalysisResult } from './analysisTypes'
+import type { AnalysisResult, ManualOverride } from './analysisTypes'
 import { makePendingAnalysis } from './analysisTypes'
 import { loadSession } from './storage'
 
@@ -27,6 +27,8 @@ export interface HistoryEntry {
   /** Analysis result from the scoring module (or pending stub for new sessions). */
   analysis: AnalysisResult
   entryVersion: 1
+  /** User-supplied score correction. Absent means no override — use system score. */
+  manualOverride?: ManualOverride
 }
 
 export interface HistoryData {
@@ -61,7 +63,27 @@ function validateEntry(raw: unknown): HistoryEntry | null {
       ? (obj.analysis as AnalysisResult)
       : makePendingAnalysis(session.sessionId)
 
-  return { session, analysis, entryVersion: 1 }
+  let manualOverride: ManualOverride | undefined
+  const rawMo = obj.manualOverride
+  if (typeof rawMo === 'object' && rawMo !== null) {
+    const mo = rawMo as Record<string, unknown>
+    if (
+      typeof mo.score === 'number' &&
+      isFinite(mo.score) &&
+      Number.isInteger(mo.score) &&
+      mo.score >= 0 &&
+      mo.score <= 100 &&
+      typeof mo.overriddenAt === 'number'
+    ) {
+      manualOverride = {
+        score: mo.score,
+        overriddenAt: mo.overriddenAt as number,
+        ...(typeof mo.reason === 'string' ? { reason: mo.reason } : {}),
+      }
+    }
+  }
+
+  return { session, analysis, entryVersion: 1, manualOverride }
 }
 
 export function loadHistory(): LoadHistoryResult {
@@ -125,7 +147,8 @@ export function upsertHistoryEntry(entry: HistoryEntry): HistoryStorageError | n
 
   const idx = data.entries.findIndex(e => e.session.sessionId === entry.session.sessionId)
   if (idx >= 0) {
-    data.entries[idx] = entry
+    // Preserve any existing manual override — only clearManualOverride removes it.
+    data.entries[idx] = { ...entry, manualOverride: data.entries[idx].manualOverride }
   } else {
     data.entries.push(entry)
   }
@@ -145,6 +168,36 @@ export function deleteHistoryEntry(sessionId: string): HistoryStorageError | nul
     data.deletedIds.push(sessionId)
   }
 
+  return writeHistory(data)
+}
+
+/**
+ * Save a manual score override for a session.
+ * Preserves analysis, session data, and all other fields.
+ * Unknown sessionId is a no-op (returns null).
+ */
+export function updateManualOverride(
+  sessionId: string,
+  override: ManualOverride,
+): HistoryStorageError | null {
+  const data = loadOrEmpty()
+  const idx = data.entries.findIndex(e => e.session.sessionId === sessionId)
+  if (idx < 0) return null
+  data.entries[idx] = { ...data.entries[idx], manualOverride: override }
+  return writeHistory(data)
+}
+
+/**
+ * Remove a manual score override for a session.
+ * Preserves analysis, session data, and all other fields.
+ * Unknown sessionId is a no-op (returns null).
+ */
+export function clearManualOverride(sessionId: string): HistoryStorageError | null {
+  const data = loadOrEmpty()
+  const idx = data.entries.findIndex(e => e.session.sessionId === sessionId)
+  if (idx < 0) return null
+  const { manualOverride: _dropped, ...rest } = data.entries[idx]
+  data.entries[idx] = rest as HistoryEntry
   return writeHistory(data)
 }
 

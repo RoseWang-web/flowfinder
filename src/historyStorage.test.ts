@@ -3,6 +3,8 @@ import {
   loadHistory,
   upsertHistoryEntry,
   deleteHistoryEntry,
+  updateManualOverride,
+  clearManualOverride,
   HISTORY_SCHEMA_VERSION,
   type HistoryEntry,
 } from './historyStorage'
@@ -297,6 +299,233 @@ describe('deletedIds blocking re-import', () => {
     const result = loadHistory()
     if (result.ok) {
       expect(result.data.entries.map(e => e.session.sessionId)).not.toContain('sess-x')
+    }
+  })
+})
+
+// ── Helper: build a minimal raw entry for JSON fixture tests ─────────────────
+
+function rawEntryWith(extra: Record<string, unknown>) {
+  return {
+    session: {
+      schemaVersion: 2,
+      sessionId: 'raw-sess',
+      articleId: 'article-v1',
+      startedAt: Date.UTC(2026, 0, 15, 10, 0, 0),
+      status: 'completed',
+      durationMs: 1_800_000,
+      activeReadingMs: 1_500_000,
+      lastSavedAt: Date.UTC(2026, 0, 15, 10, 30, 0),
+      endedAt: Date.UTC(2026, 0, 15, 10, 30, 0),
+      endReason: 'manual',
+      checkIn: null,
+      cameraEnabled: false,
+      events: [],
+    },
+    analysis: {
+      sessionId: 'raw-sess',
+      status: 'ready',
+      totalScore: 70,
+      summary: null,
+      scoringVersion: '0.1.0',
+      source: 'real',
+      analyzedAt: 1_000,
+    },
+    entryVersion: 1,
+    ...extra,
+  }
+}
+
+// ── updateManualOverride ──────────────────────────────────────────────────────
+
+describe('updateManualOverride', () => {
+  it('saves override score and preserves analysis and session', () => {
+    upsertHistoryEntry(makeEntry('s1'))
+    const err = updateManualOverride('s1', { score: 85, overriddenAt: 1000 })
+    expect(err).toBeNull()
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const e = result.data.entries.find(e => e.session.sessionId === 's1')!
+      expect(e.manualOverride?.score).toBe(85)
+      expect(e.analysis.totalScore).toBe(75) // original untouched
+    }
+  })
+
+  it('no-ops silently for unknown sessionId', () => {
+    const err = updateManualOverride('missing', { score: 50, overriddenAt: 1000 })
+    expect(err).toBeNull()
+  })
+
+  it('stores optional reason when provided', () => {
+    upsertHistoryEntry(makeEntry('s1'))
+    updateManualOverride('s1', { score: 60, reason: '有感覺比較準', overriddenAt: 2000 })
+    const result = loadHistory()
+    if (result.ok) {
+      const e = result.data.entries.find(e => e.session.sessionId === 's1')!
+      expect(e.manualOverride?.reason).toBe('有感覺比較準')
+    }
+  })
+
+  it('stores reason as undefined when not provided', () => {
+    upsertHistoryEntry(makeEntry('s1'))
+    updateManualOverride('s1', { score: 60, overriddenAt: 2000 })
+    const result = loadHistory()
+    if (result.ok) {
+      const e = result.data.entries.find(e => e.session.sessionId === 's1')!
+      expect(e.manualOverride?.reason).toBeUndefined()
+    }
+  })
+
+  it('returns write error when localStorage.setItem throws', () => {
+    upsertHistoryEntry(makeEntry('s1'))
+    vi.spyOn(localStorageMock, 'setItem').mockImplementationOnce(() => { throw new Error('quota') })
+    const err = updateManualOverride('s1', { score: 85, overriddenAt: 1000 })
+    expect(err).not.toBeNull()
+    expect(err!.kind).toBe('write_error')
+  })
+
+  it('allows override score of 0 (zero is a valid score)', () => {
+    upsertHistoryEntry(makeEntry('s1'))
+    updateManualOverride('s1', { score: 0, overriddenAt: 1000 })
+    const result = loadHistory()
+    if (result.ok) {
+      const e = result.data.entries.find(e => e.session.sessionId === 's1')!
+      expect(e.manualOverride?.score).toBe(0)
+    }
+  })
+})
+
+// ── clearManualOverride ───────────────────────────────────────────────────────
+
+describe('clearManualOverride', () => {
+  it('removes override, leaves analysis and session intact', () => {
+    upsertHistoryEntry(makeEntry('s1'))
+    updateManualOverride('s1', { score: 90, overriddenAt: 1000 })
+    clearManualOverride('s1')
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const e = result.data.entries.find(e => e.session.sessionId === 's1')!
+      expect(e.manualOverride).toBeUndefined()
+      expect(e.analysis.totalScore).toBe(75)
+    }
+  })
+
+  it('no-ops for unknown sessionId', () => {
+    const err = clearManualOverride('missing')
+    expect(err).toBeNull()
+  })
+})
+
+// ── upsertHistoryEntry preserves manualOverride ───────────────────────────────
+
+describe('upsertHistoryEntry preserves manualOverride', () => {
+  it('re-upserting a session does not wipe an existing manual override', () => {
+    upsertHistoryEntry(makeEntry('s1'))
+    updateManualOverride('s1', { score: 90, overriddenAt: 1000 })
+    // simulate analysis update arriving
+    const updated = { ...makeEntry('s1'), analysis: { ...makeAnalysis('s1'), totalScore: 80 } }
+    upsertHistoryEntry(updated)
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const e = result.data.entries.find(e => e.session.sessionId === 's1')!
+      expect(e.manualOverride?.score).toBe(90) // preserved
+      expect(e.analysis.totalScore).toBe(80)   // updated
+    }
+  })
+
+  it('new session (no existing entry) has no override', () => {
+    upsertHistoryEntry(makeEntry('brand-new'))
+    const result = loadHistory()
+    if (result.ok) {
+      const e = result.data.entries.find(e => e.session.sessionId === 'brand-new')!
+      expect(e.manualOverride).toBeUndefined()
+    }
+  })
+})
+
+// ── validateEntry with manualOverride ─────────────────────────────────────────
+
+describe('validateEntry with manualOverride', () => {
+  it('parses valid manualOverride from raw JSON', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawEntryWith({ manualOverride: { score: 55, overriddenAt: 999 } })],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.entries[0].manualOverride?.score).toBe(55)
+    }
+  })
+
+  it('ignores manualOverride with score > 100', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawEntryWith({ manualOverride: { score: 150, overriddenAt: 999 } })],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    if (result.ok) {
+      expect(result.data.entries[0].manualOverride).toBeUndefined()
+    }
+  })
+
+  it('ignores manualOverride with non-integer score', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawEntryWith({ manualOverride: { score: 75.5, overriddenAt: 999 } })],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    if (result.ok) {
+      expect(result.data.entries[0].manualOverride).toBeUndefined()
+    }
+  })
+
+  it('ignores manualOverride with score < 0', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawEntryWith({ manualOverride: { score: -1, overriddenAt: 999 } })],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    if (result.ok) {
+      expect(result.data.entries[0].manualOverride).toBeUndefined()
+    }
+  })
+
+  it('backward-compat: entry without manualOverride field loads fine', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawEntryWith({})],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.entries[0].manualOverride).toBeUndefined()
+    }
+  })
+
+  it('parses manualOverride score of 0 (valid edge case)', () => {
+    const raw = JSON.stringify({
+      schemaVersion: HISTORY_SCHEMA_VERSION,
+      entries: [rawEntryWith({ manualOverride: { score: 0, overriddenAt: 999 } })],
+      deletedIds: [],
+    })
+    localStorageMock.setItem('flowfinder_history_v1', raw)
+    const result = loadHistory()
+    if (result.ok) {
+      expect(result.data.entries[0].manualOverride?.score).toBe(0)
     }
   })
 })
